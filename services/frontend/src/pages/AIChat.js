@@ -46,7 +46,7 @@ import {
   Psychology as PsychologyIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
-import { wsManager } from '../services/api';
+import { wsManager, ollamaAPI } from '../services/api';
 import { formatDistanceToNow } from 'date-fns';
 import { chatAPI } from '../services/api';
 import ReactMarkdown from 'react-markdown';
@@ -108,9 +108,8 @@ function AIChat() {
 
   const fetchAvailableModels = async () => {
     try {
-      const response = await fetch('/api/ollama/models');
-      const models = await response.json();
-      setAvailableModels(models);
+      const response = await ollamaAPI.getModels();
+      setAvailableModels(response.data);
     } catch (error) {
       console.error('Error fetching available models:', error);
     }

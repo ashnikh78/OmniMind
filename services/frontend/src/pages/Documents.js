@@ -53,7 +53,7 @@ const Documents = () => {
 
   const fetchDocuments = async () => {
     try {
-      const response = await api.get('/api/documents');
+      const response = await api.get('/api/v1/documents');
       setDocuments(response.data);
       setLoading(false);
     } catch (err) {
@@ -72,7 +72,7 @@ const Documents = () => {
         updated_at: new Date().toISOString(),
         collaborators: [],
       };
-      const response = await api.post('/api/documents', newDocument);
+      const response = await api.post('/api/v1/documents', newDocument);
       setDocuments([...documents, response.data]);
       setOpenNewDialog(false);
       setNewDocumentTitle('');
@@ -88,7 +88,7 @@ const Documents = () => {
         email: shareEmail,
         role: 'editor',
       };
-      await api.post(`/api/documents/collaborators/${selectedDocument.id}`, collaborator);
+      await api.post(`/api/v1/documents/collaborators/${selectedDocument.id}`, collaborator);
       setOpenShareDialog(false);
       setShareEmail('');
       fetchDocuments();
@@ -99,7 +99,7 @@ const Documents = () => {
 
   const handleRemoveCollaborator = async (documentId, collaboratorId) => {
     try {
-      await api.delete(`/api/documents/collaborators/${documentId}/${collaboratorId}`);
+      await api.delete(`/api/v1/documents/collaborators/${documentId}/${collaboratorId}`);
       fetchDocuments();
     } catch (err) {
       setError('Failed to remove collaborator');
@@ -108,7 +108,7 @@ const Documents = () => {
 
   const handleViewHistory = async (documentId) => {
     try {
-      const response = await api.get(`/api/documents/${documentId}/history`);
+      const response = await api.get(`/api/v1/documents/${documentId}/history`);
       setDocumentHistory(response.data);
       setOpenHistoryDialog(true);
     } catch (err) {

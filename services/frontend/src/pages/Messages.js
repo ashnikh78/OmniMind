@@ -9,6 +9,7 @@ import {
   ListItem,
   ListItemText,
   ListItemAvatar,
+  ListItemIcon,
   Avatar,
   Divider,
   CircularProgress,
@@ -23,6 +24,9 @@ import {
   Tooltip,
   Alert,
   Grid,
+  Card,
+  CardContent,
+  CardHeader,
 } from '@mui/material';
 import {
   Send as SendIcon,
@@ -37,10 +41,14 @@ import {
   Archive as ArchiveIcon,
   Star as StarIcon,
   StarBorder as StarBorderIcon,
+  Person as PersonIcon,
+  Group as GroupIcon,
+  Sort as SortIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
-import { messagesAPI } from '../services/api';
+import { messageAPI } from '../services/api';
 import { formatDistanceToNow } from 'date-fns';
+import { toast } from 'react-toastify';
 
 function Messages() {
   const { user } = useAuth();
@@ -58,6 +66,11 @@ function Messages() {
   const [newConversationUser, setNewConversationUser] = useState('');
   const messagesEndRef = useRef(null);
   const [error, setError] = useState('');
+  const [attachment, setAttachment] = useState(null);
+  const [filter, setFilter] = useState('all');
+  const [sort, setSort] = useState('newest');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [messageToDelete, setMessageToDelete] = useState(null);
 
   useEffect(() => {
     fetchConversations();
@@ -72,13 +85,12 @@ function Messages() {
   const fetchConversations = async () => {
     try {
       setLoading(true);
-      const response = await messagesAPI.getConversations();
-      setConversations(response.conversations || []);
-      if (response.conversations?.length > 0) {
-        setSelectedConversation(response.conversations[0]);
-      }
-    } catch (error) {
-      console.error('Error fetching conversations:', error);
+      const response = await messageAPI.getConversations();
+      setConversations(response.data);
+      setError(null);
+    } catch (err) {
+      setError('Failed to fetch conversations');
+      toast.error('Failed to fetch conversations');
     } finally {
       setLoading(false);
     }
@@ -87,30 +99,35 @@ function Messages() {
   const fetchMessages = async (conversationId) => {
     try {
       setLoading(true);
-      const response = await messagesAPI.getConversation(conversationId);
-      setMessages(response.messages || []);
+      const response = await messageAPI.getMessages({ conversationId });
+      setMessages(response.data);
+      setError(null);
       scrollToBottom();
-    } catch (error) {
-      console.error('Error fetching messages:', error);
+    } catch (err) {
+      setError('Failed to fetch messages');
+      toast.error('Failed to fetch messages');
     } finally {
       setLoading(false);
     }
   };
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !selectedConversation) return;
+    if (!newMessage.trim() && !attachment) return;
 
     try {
-      const message = {
-        content: newMessage,
-        timestamp: new Date().toISOString(),
-      };
+      const formData = new FormData();
+      formData.append('content', newMessage);
+      if (attachment) {
+        formData.append('attachment', attachment);
+      }
+      formData.append('conversationId', selectedConversation.id);
 
-      await messagesAPI.sendMessage(selectedConversation.id, message);
+      await messageAPI.sendMessage(formData);
       setNewMessage('');
+      setAttachment(null);
       fetchMessages(selectedConversation.id);
-    } catch (error) {
-      console.error('Error sending message:', error);
+    } catch (err) {
+      toast.error('Failed to send message');
     }
   };
 
@@ -142,7 +159,7 @@ function Messages() {
   const handleDeleteClick = async () => {
     if (selectedMessage) {
       try {
-        await messagesAPI.deleteMessage(selectedConversation.id, selectedMessage.id);
+        await messageAPI.deleteMessage(selectedMessage.id);
         setMessages((prevMessages) =>
           prevMessages.filter((msg) => msg.id !== selectedMessage.id)
         );
@@ -163,7 +180,7 @@ function Messages() {
   const handleEditSave = async () => {
     if (selectedMessage && editMessage.trim()) {
       try {
-        await messagesAPI.updateMessage(selectedConversation.id, selectedMessage.id, {
+        await messageAPI.updateMessage(selectedMessage.id, {
           content: editMessage,
         });
         setMessages((prevMessages) =>
@@ -184,7 +201,7 @@ function Messages() {
     if (!newConversationUser.trim()) return;
 
     try {
-      const response = await messagesAPI.createConversation({
+      const response = await messageAPI.createConversation({
         participant: newConversationUser,
       });
       setConversations((prev) => [...prev, response.conversation]);
@@ -203,6 +220,39 @@ function Messages() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const handleDeleteMessage = async () => {
+    if (!messageToDelete) return;
+
+    try {
+      await messageAPI.deleteMessage(messageToDelete.id);
+      setMessages(messages.filter(msg => msg.id !== messageToDelete.id));
+      setDeleteDialogOpen(false);
+      setMessageToDelete(null);
+      toast.success('Message deleted successfully');
+    } catch (err) {
+      toast.error('Failed to delete message');
+    }
+  };
+
+  const handleAttachmentChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      setAttachment(file);
+    }
+  };
+
+  const handleSearch = (event) => {
+    setSearchQuery(event.target.value);
+  };
+
+  const handleFilterChange = (event) => {
+    setFilter(event.target.value);
+  };
+
+  const handleSortChange = (event) => {
+    setSort(event.target.value);
+  };
 
   if (loading && !selectedConversation) {
     return (
@@ -231,7 +281,7 @@ function Messages() {
               size="small"
               placeholder="Search conversations..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={handleSearch}
               fullWidth
               InputProps={{
                 startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
@@ -360,6 +410,15 @@ function Messages() {
                           <Typography variant="body1">
                             {message.content}
                           </Typography>
+                          {message.attachment && (
+                            <Box sx={{ mt: 1 }}>
+                              <img
+                                src={message.attachment}
+                                alt="attachment"
+                                style={{ maxWidth: '100%', borderRadius: 4 }}
+                              />
+                            </Box>
+                          )}
                           <Typography
                             variant="caption"
                             sx={{
@@ -422,13 +481,25 @@ function Messages() {
                 size="small"
                 sx={{ mr: 2 }}
               />
-              <IconButton
-                color="primary"
+              <input
+                type="file"
+                id="attachment"
+                style={{ display: 'none' }}
+                onChange={handleAttachmentChange}
+              />
+              <label htmlFor="attachment">
+                <IconButton component="span">
+                  <ContentCopyIcon />
+                </IconButton>
+              </label>
+              <Button
+                variant="contained"
+                endIcon={<SendIcon />}
                 onClick={handleSendMessage}
-                disabled={!newMessage.trim()}
+                disabled={!newMessage.trim() && !attachment}
               >
-                <SendIcon />
-              </IconButton>
+                Send
+              </Button>
             </Paper>
           </>
         ) : (
@@ -523,6 +594,29 @@ function Messages() {
             disabled={!newConversationUser.trim()}
           >
             Start Conversation
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Message Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+      >
+        <DialogTitle>Delete Message</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this message? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+          <Button
+            onClick={handleDeleteMessage}
+            color="error"
+            variant="contained"
+          >
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

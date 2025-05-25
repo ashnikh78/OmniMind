@@ -27,6 +27,10 @@ import {
   DialogContent,
   DialogActions,
   LinearProgress,
+  ListItemAvatar,
+  Avatar,
+  Chip,
+  ListItemIcon,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -36,10 +40,13 @@ import {
   Timeline as TimelineIcon,
   Memory as MemoryIcon,
   Speed as SpeedIcon,
-  Accuracy as AccuracyIcon,
+  Assessment as AssessmentIcon,
+  Storage as StorageIcon,
+  Code as CodeIcon,
 } from '@mui/icons-material';
 import { useMLService } from '../contexts/MLServiceContext';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend } from 'recharts';
+import { useAuth } from '../contexts/AuthContext';
+import { api } from '../services/api';
 
 function MLService() {
   const {
@@ -58,6 +65,7 @@ function MLService() {
     deployModel,
     refreshModels,
   } = useMLService();
+  const { user } = useAuth();
 
   const [input, setInput] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -189,7 +197,7 @@ function MLService() {
                   </Grid>
                   <Grid item xs={12} sm={6} md={3}>
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <AccuracyIcon sx={{ mr: 1 }} />
+                      <AssessmentIcon sx={{ mr: 1 }} />
                       <Box>
                         <Typography variant="h6">
                           {modelMetrics.accuracy}%

@@ -1,17 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Grid,
+  Paper,
+  Typography,
   Card,
   CardContent,
   CardHeader,
-  Typography,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemAvatar,
+  Avatar,
+  Divider,
+  CircularProgress,
+  Alert,
   Button,
   ButtonGroup,
   IconButton,
   Tooltip,
-  Alert,
-  CircularProgress,
   Select,
   MenuItem,
   FormControl,
@@ -26,6 +33,8 @@ import {
   People as PeopleIcon,
   Message as MessageIcon,
   Memory as MemoryIcon,
+  Notifications as NotificationsIcon,
+  Person as PersonIcon,
 } from '@mui/icons-material';
 import {
   LineChart,
@@ -43,6 +52,8 @@ import {
   Cell,
 } from 'recharts';
 import { useAnalytics } from '../contexts/AnalyticsContext';
+import { useAuth } from '../contexts/AuthContext';
+import { analyticsAPI } from '../services/api';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
