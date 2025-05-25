@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title }} - OmniMind AI Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100">
+    <!-- Navigation (same as dashboard.html) -->
+    <nav class="bg-white shadow-lg">
+        <!-- ... navigation content ... -->
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Access Overview -->
+        <div class="bg-white shadow rounded-lg mb-8">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">
+                    Access Overview
+                </h3>
+                <div class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-4">
+                    <!-- Total Roles -->
+                    <div class="bg-gray-50 overflow-hidden shadow rounded-lg">
+                        <div class="px-4 py-5 sm:p-6">
+                            <dt class="text-sm font-medium text-gray-500 truncate">
+                                Total Roles
+                            </dt>
+                            <dd class="mt-1 text-3xl font-semibold text-gray-900">
+                                {{ access_stats.total_roles }}
+                            </dd>
+                        </div>
+                    </div>
+
+                    <!-- Total Permissions -->
+                    <div class="bg-gray-50 overflow-hidden shadow rounded-lg">
+                        <div class="px-4 py-5 sm:p-6">
+                            <dt class="text-sm font-medium text-gray-500 truncate">
+                                Total Permissions
+                            </dt>
+                            <dd class="mt-1 text-3xl font-semibold text-gray-900">
+                                {{ access_stats.total_permissions }}
+                            </dd>
+                        </div>
+                    </div>
+
+                    <!-- Access Violations -->
+                    <div class="bg-gray-50 overflow-hidden shadow rounded-lg">
+                        <div class="px-4 py-5 sm:p-6">
+                            <dt class="text-sm font-medium text-gray-500 truncate">
+                                Access Violations
+                            </dt>
+                            <dd class="mt-1 text-3xl font-semibold text-gray-900">
+                                {{ access_stats.access_violations }}
+                            </dd>
+                        </div>
+                    </div>
+
+                    <!-- Active Sessions -->
+                    <div class="bg-gray-50 overflow-hidden shadow rounded-lg">
+                        <div class="px-4 py-5 sm:p-6">
+                            <dt class="text-sm font-medium text-gray-500 truncate">
+                                Active Sessions
+                            </dt>
+                            <dd class="mt-1 text-3xl font-semibold text-gray-900">
+                                {{ access_stats.active_sessions }}
+                            </dd>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Role Management -->
+        <div class="bg-white shadow rounded-lg mb-8">
+            <div class="px-4 py-5 sm:px-6">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">
+                        Role Management
+                    </h3>
+                    <button onclick="showAddRoleModal()" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
+                        <i class="fas fa-plus mr-2"></i>
+                        Add Role
+                    </button>
+                </div>
+                <div class="mt-2">
+                    <div class="flex space-x-4 mb-4">
+                        <input type="text" id="roleSearch" placeholder="Search roles..." 
+                               class="rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Role Name
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Description
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Users
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Permissions
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Actions
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {% for role in roles %}
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="text-sm font-medium text-gray-900">
+                                            {{ role.name }}
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="text-sm text-gray-500">
+                                            {{ role.description }}
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="text-sm text-gray-900">
+                                            {{ role.user_count }}
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="flex flex-wrap gap-1">
+                                            {% for permission in role.permissions %}
+                                            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                                {{ permission }}
+                                            </span>
+                                            {% endfor %}
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <button onclick="editRole('{{ role.id }}')" class="text-indigo-600 hover:text-indigo-900 mr-3">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button onclick="managePermissions('{{ role.id }}')" class="text-blue-600 hover:text-blue-900 mr-3">
+                                            <i class="fas fa-key"></i>
+                                        </button>
+                                        <button onclick="deleteRole('{{ role.id }}')" class="text-red-600 hover:text-red-900">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Permission Management -->
+        <div class="bg-white shadow rounded-lg mb-8">
+            <div class="px-4 py-5 sm:px-6">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">
+                        Permission Management
+                    </h3>
+                    <button onclick="showAddPermissionModal()" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
+                        <i class="fas fa-plus mr-2"></i>
+                        Add Permission
+                    </button>
+                </div>
+                <div class="mt-2">
+                    <div class="flex space-x-4 mb-4">
+                        <select id="permissionCategory" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                            <option value="all">All Categories</option>
+                            <option value="user">User</option>
+                            <option value="content">Content</option>
+                            <option value="system">System</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                        <input type="text" id="permissionSearch" placeholder="Search permissions..." 
+                               class="rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Permission Name
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Category
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Description
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Roles
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Actions
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {% for permission in permissions %}
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="text-sm font-medium text-gray-900">
+                                            {{ permission.name }}
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                                            {% if permission.category == 'user' %}
+                                                bg-green-100 text-green-800
+                                            {% elif permission.category == 'content' %}
+                                                bg-blue-100 text-blue-800
+                                            {% elif permission.category == 'system' %}
+                                                bg-purple-100 text-purple-800
+                                            {% else %}
+                                                bg-red-100 text-red-800
+                                            {% endif %}">
+                                            {{ permission.category }}
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="text-sm text-gray-500">
+                                            {{ permission.description }}
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="flex flex-wrap gap-1">
+                                            {% for role in permission.roles %}
+                                            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                                                {{ role }}
+                                            </span>
+                                            {% endfor %}
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <button onclick="editPermission('{{ permission.id }}')" class="text-indigo-600 hover:text-indigo-900 mr-3">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button onclick="deletePermission('{{ permission.id }}')" class="text-red-600 hover:text-red-900">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Access Logs -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:px-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">
+                    Access Logs
+                </h3>
+                <div class="mt-2">
+                    <div class="flex space-x-4 mb-4">
+                        <select id="accessType" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                            <option value="all">All Types</option>
+                            <option value="login">Login</option>
+                            <option value="logout">Logout</option>
+                            <option value="permission">Permission</option>
+                            <option value="violation">Violation</option>
+                        </select>
+                        <input type="text" id="accessSearch" placeholder="Search access logs..." 
+                               class="rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Timestamp
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        User
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Type
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Resource
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Status
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {% for log in access_logs %}
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        {{ log.timestamp }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="flex items-center">
+                                            <div class="flex-shrink-0 h-8 w-8">
+                                                <img class="h-8 w-8 rounded-full" src="{{ log.user.avatar }}" alt="">
+                                            </div>
+                                            <div class="ml-4">
+                                                <div class="text-sm font-medium text-gray-900">
+                                                    {{ log.user.name }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        {{ log.type }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        {{ log.resource }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                                            {% if log.status == 'success' %}
+                                                bg-green-100 text-green-800
+                                            {% else %}
+                                                bg-red-100 text-red-800
+                                            {% endif %}">
+                                            {{ log.status }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add loading overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white p-4 rounded-lg shadow-lg">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            <p class="mt-2 text-gray-700">Loading...</p>
+        </div>
+    </div>
+
+    <!-- Add error notification -->
+    <div id="errorNotification" class="fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded hidden z-50" role="alert">
+        <span class="block sm:inline" id="errorMessage"></span>
+        <button class="absolute top-0 bottom-0 right-0 px-4 py-3" onclick="hideError()">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    <!-- Add success notification -->
+    <div id="successNotification" class="fixed top-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded hidden z-50" role="alert">
+        <span class="block sm:inline" id="successMessage"></span>
+        <button class="absolute top-0 bottom-0 right-0 px-4 py-3" onclick="hideSuccess()">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    <!-- Add pagination component -->
+    <div class="mt-4 flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
+        <div class="flex flex-1 justify-between sm:hidden">
+            <button onclick="changePage({{ access_data.pagination.current_page - 1 }})"
+                    class="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    {% if access_data.pagination.current_page == 1 %}disabled{% endif %}>
+                Previous
+            </button>
+            <button onclick="changePage({{ access_data.pagination.current_page + 1 }})"
+                    class="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    {% if access_data.pagination.current_page * access_data.pagination.per_page >= access_data.pagination.total_roles %}disabled{% endif %}>
+                Next
+            </button>
+        </div>
+        <div class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+            <div>
+                <p class="text-sm text-gray-700">
+                    Showing
+                    <span class="font-medium">{{ (access_data.pagination.current_page - 1) * access_data.pagination.per_page + 1 }}</span>
+                    to
+                    <span class="font-medium">{{ min(access_data.pagination.current_page * access_data.pagination.per_page, access_data.pagination.total_roles) }}</span>
+                    of
+                    <span class="font-medium">{{ access_data.pagination.total_roles }}</span>
+                    results
+                </p>
+            </div>
+            <div>
+                <nav class="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                    <button onclick="changePage({{ access_data.pagination.current_page - 1 }})"
+                            class="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0"
+                            {% if access_data.pagination.current_page == 1 %}disabled{% endif %}>
+                        <span class="sr-only">Previous</span>
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    {% for page in range(1, (access_data.pagination.total_roles + access_data.pagination.per_page - 1) // access_data.pagination.per_page + 1) %}
+                    <button onclick="changePage({{ page }})"
+                            class="relative inline-flex items-center px-4 py-2 text-sm font-semibold {% if page == access_data.pagination.current_page %}bg-indigo-600 text-white{% else %}text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50{% endif %} focus:z-20 focus:outline-offset-0">
+                        {{ page }}
+                    </button>
+                    {% endfor %}
+                    <button onclick="changePage({{ access_data.pagination.current_page + 1 }})"
+                            class="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0"
+                            {% if access_data.pagination.current_page * access_data.pagination.per_page >= access_data.pagination.total_roles %}disabled{% endif %}>
+                        <span class="sr-only">Next</span>
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add confirmation modal -->
+    <div id="confirmationModal" class="fixed z-10 inset-0 overflow-y-auto hidden">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                            <i class="fas fa-exclamation-triangle text-red-600"></i>
+                        </div>
+                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900" id="confirmationTitle">
+                                Confirm Action
+                            </h3>
+                            <div class="mt-2">
+                                <p class="text-sm text-gray-500" id="confirmationMessage">
+                                    Are you sure you want to perform this action?
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button type="button" id="confirmButton"
+                            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm">
+                        Confirm
+                    </button>
+                    <button type="button" onclick="hideConfirmationModal()"
+                            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Role Modal -->
+    <div id="addRoleModal" class="fixed z-10 inset-0 overflow-y-auto hidden">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <form id="addRoleForm" class="p-6">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="roleName">
+                            Role Name
+                        </label>
+                        <input type="text" id="roleName" name="name" required
+                               class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="roleDescription">
+                            Description
+                        </label>
+                        <textarea id="roleDescription" name="description" required
+                                  class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"></textarea>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">
+                            Permissions
+                        </label>
+                        <div class="mt-2 space-y-2 max-h-60 overflow-y-auto">
+                            {% for permission in access_data.all_permissions %}
+                            <div class="flex items-center">
+                                <input type="checkbox" id="permission_{{ permission.id }}" name="permissions" value="{{ permission.id }}"
+                                       class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                <label for="permission_{{ permission.id }}" class="ml-2 block text-sm text-gray-900">
+                                    {{ permission.name }}
+                                    <span class="text-gray-500 text-xs">({{ permission.category }})</span>
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" onclick="hideAddRoleModal()"
+                                class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                                class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                            Add Role
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Role Modal -->
+    <div id="editRoleModal" class="fixed z-10 inset-0 overflow-y-auto hidden">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <form id="editRoleForm" class="p-6">
+                    <input type="hidden" id="editRoleId" name="id">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="editRoleName">
+                            Role Name
+                        </label>
+                        <input type="text" id="editRoleName" name="name" required
+                               class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="editRoleDescription">
+                            Description
+                        </label>
+                        <textarea id="editRoleDescription" name="description" required
+                                  class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"></textarea>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">
+                            Permissions
+                        </label>
+                        <div class="mt-2 space-y-2 max-h-60 overflow-y-auto">
+                            {% for permission in access_data.all_permissions %}
+                            <div class="flex items-center">
+                                <input type="checkbox" id="edit_permission_{{ permission.id }}" name="permissions" value="{{ permission.id }}"
+                                       class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                <label for="edit_permission_{{ permission.id }}" class="ml-2 block text-sm text-gray-900">
+                                    {{ permission.name }}
+                                    <span class="text-gray-500 text-xs">({{ permission.category }})</span>
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" onclick="hideEditRoleModal()"
+                                class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                                class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                            Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Permission Modal -->
+    <div id="addPermissionModal" class="fixed z-10 inset-0 overflow-y-auto hidden">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <form id="addPermissionForm" class="p-6">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="permissionName">
+                            Permission Name
+                        </label>
+                        <input type="text" id="permissionName" name="name" required
+                               class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="permissionCategory">
+                            Category
+                        </label>
+                        <select id="permissionCategory" name="category" required
+                                class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                            <option value="user">User</option>
+                            <option value="content">Content</option>
+                            <option value="system">System</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="permissionDescription">
+                            Description
+                        </label>
+                        <textarea id="permissionDescription" name="description" required
+                                  class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"></textarea>
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" onclick="hideAddPermissionModal()"
+                                class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                                class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                            Add Permission
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Permission Modal -->
+    <div id="editPermissionModal" class="fixed z-10 inset-0 overflow-y-auto hidden">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <form id="editPermissionForm" class="p-6">
+                    <input type="hidden" id="editPermissionId" name="id">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="editPermissionName">
+                            Permission Name
+                        </label>
+                        <input type="text" id="editPermissionName" name="name" required
+                               class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="editPermissionCategory">
+                            Category
+                        </label>
+                        <select id="editPermissionCategory" name="category" required
+                                class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                            <option value="user">User</option>
+                            <option value="content">Content</option>
+                            <option value="system">System</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="editPermissionDescription">
+                            Description
+                        </label>
+                        <textarea id="editPermissionDescription" name="description" required
+                                  class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"></textarea>
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" onclick="hideEditPermissionModal()"
+                                class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                                class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                            Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Filter functions
+        function filterTable(tableId, searchId, categoryId = null, typeId = null) {
+            const table = document.getElementById(tableId);
+            const searchInput = document.getElementById(searchId);
+            const categorySelect = categoryId ? document.getElementById(categoryId) : null;
+            const typeSelect = typeId ? document.getElementById(typeId) : null;
+            
+            const searchText = searchInput.value.toLowerCase();
+            const categoryValue = categorySelect ? categorySelect.value : 'all';
+            const typeValue = typeSelect ? typeSelect.value : 'all';
+            
+            const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+            
+            for (let row of rows) {
+                const text = row.textContent.toLowerCase();
+                const category = categorySelect ? row.cells[1].textContent.toLowerCase() : '';
+                const type = typeSelect ? row.cells[2].textContent.toLowerCase() : '';
+                
+                const matchesSearch = text.includes(searchText);
+                const matchesCategory = categoryValue === 'all' || category === categoryValue.toLowerCase();
+                const matchesType = typeValue === 'all' || type === typeValue.toLowerCase();
+                
+                row.style.display = matchesSearch && matchesCategory && matchesType ? '' : 'none';
+            }
+        }
+
+        // Modal functions
+        function showAddRoleModal() {
+            document.getElementById('addRoleModal').classList.remove('hidden');
+        }
+
+        function hideAddRoleModal() {
+            document.getElementById('addRoleModal').classList.add('hidden');
+        }
+
+        function showAddPermissionModal() {
+            document.getElementById('addPermissionModal').classList.remove('hidden');
+        }
+
+        function hideAddPermissionModal() {
+            document.getElementById('addPermissionModal').classList.add('hidden');
+        }
+
+        // Add loading state management
+        function showLoading() {
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.add('hidden');
+        }
+
+        // Add notification management
+        function showError(message) {
+            const notification = document.getElementById('errorNotification');
+            const messageElement = document.getElementById('errorMessage');
+            messageElement.textContent = message;
+            notification.classList.remove('hidden');
+            setTimeout(() => hideError(), 5000);
+        }
+
+        function hideError() {
+            document.getElementById('errorNotification').classList.add('hidden');
+        }
+
+        function showSuccess(message) {
+            const notification = document.getElementById('successNotification');
+            const messageElement = document.getElementById('successMessage');
+            messageElement.textContent = message;
+            notification.classList.remove('hidden');
+            setTimeout(() => hideSuccess(), 5000);
+        }
+
+        function hideSuccess() {
+            document.getElementById('successNotification').classList.add('hidden');
+        }
+
+        // Add confirmation modal management
+        function showConfirmationModal(title, message, onConfirm) {
+            const modal = document.getElementById('confirmationModal');
+            const titleElement = document.getElementById('confirmationTitle');
+            const messageElement = document.getElementById('confirmationMessage');
+            const confirmButton = document.getElementById('confirmButton');
+            
+            titleElement.textContent = title;
+            messageElement.textContent = message;
+            confirmButton.onclick = () => {
+                hideConfirmationModal();
+                onConfirm();
+            };
+            
+            modal.classList.remove('hidden');
+        }
+
+        function hideConfirmationModal() {
+            document.getElementById('confirmationModal').classList.add('hidden');
+        }
+
+        // Add pagination handling
+        function changePage(page) {
+            if (page < 1) return;
+            
+            const url = new URL(window.location.href);
+            url.searchParams.set('page', page);
+            window.location.href = url.toString();
+        }
+
+        // Role management functions
+        async function editRole(roleId) {
+            try {
+                showLoading();
+                const response = await fetch(`/api/roles/${roleId}`);
+                if (!response.ok) throw new Error('Failed to fetch role data');
+                
+                const role = await response.json();
+                
+                // Populate edit form
+                document.getElementById('editRoleId').value = role.id;
+                document.getElementById('editRoleName').value = role.name;
+                document.getElementById('editRoleDescription').value = role.description;
+                
+                // Reset and set permissions
+                const permissionCheckboxes = document.querySelectorAll('input[name="permissions"]');
+                permissionCheckboxes.forEach(checkbox => {
+                    checkbox.checked = role.permissions.includes(parseInt(checkbox.value));
+                });
+                
+                showEditRoleModal();
+            } catch (error) {
+                showError('Failed to load role data: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function managePermissions(roleId) {
+            try {
+                showLoading();
+                const response = await fetch(`/api/roles/${roleId}/permissions`);
+                if (!response.ok) throw new Error('Failed to fetch role permissions');
+                
+                const permissions = await response.json();
+                // Show permission management modal
+                // ... implementation details ...
+            } catch (error) {
+                showError('Failed to load permissions: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function deleteRole(roleId) {
+            showConfirmationModal(
+                'Delete Role',
+                'Are you sure you want to delete this role? This action cannot be undone.',
+                async () => {
+                    try {
+                        showLoading();
+                        const response = await fetch(`/api/roles/${roleId}`, {
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+                            }
+                        });
+                        
+                        if (!response.ok) throw new Error('Failed to delete role');
+                        
+                        showSuccess('Role deleted successfully');
+                        window.location.reload();
+                    } catch (error) {
+                        showError('Failed to delete role: ' + error.message);
+                    } finally {
+                        hideLoading();
+                    }
+                }
+            );
+        }
+
+        // Permission management functions
+        async function editPermission(permissionId) {
+            try {
+                showLoading();
+                const response = await fetch(`/api/permissions/${permissionId}`);
+                if (!response.ok) throw new Error('Failed to fetch permission data');
+                
+                const permission = await response.json();
+                
+                // Populate edit form
+                document.getElementById('editPermissionId').value = permission.id;
+                document.getElementById('editPermissionName').value = permission.name;
+                document.getElementById('editPermissionCategory').value = permission.category;
+                document.getElementById('editPermissionDescription').value = permission.description;
+                
+                showEditPermissionModal();
+            } catch (error) {
+                showError('Failed to load permission data: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function deletePermission(permissionId) {
+            showConfirmationModal(
+                'Delete Permission',
+                'Are you sure you want to delete this permission? This action cannot be undone.',
+                async () => {
+                    try {
+                        showLoading();
+                        const response = await fetch(`/api/permissions/${permissionId}`, {
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+                            }
+                        });
+                        
+                        if (!response.ok) throw new Error('Failed to delete permission');
+                        
+                        showSuccess('Permission deleted successfully');
+                        window.location.reload();
+                    } catch (error) {
+                        showError('Failed to delete permission: ' + error.message);
+                    } finally {
+                        hideLoading();
+                    }
+                }
+            );
+        }
+
+        // Add event listeners
+        document.getElementById('roleSearch').addEventListener('input', () => 
+            filterTable('roleTable', 'roleSearch'));
+        
+        document.getElementById('permissionSearch').addEventListener('input', () => 
+            filterTable('permissionTable', 'permissionSearch', 'permissionCategory'));
+        document.getElementById('permissionCategory').addEventListener('change', () => 
+            filterTable('permissionTable', 'permissionSearch', 'permissionCategory'));
+        
+        document.getElementById('accessSearch').addEventListener('input', () => 
+            filterTable('accessTable', 'accessSearch', null, 'accessType'));
+        document.getElementById('accessType').addEventListener('change', () => 
+            filterTable('accessTable', 'accessSearch', null, 'accessType'));
+
+        // Form submissions
+        document.getElementById('addRoleForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                showLoading();
+                const formData = new FormData(e.target);
+                const response = await fetch('/api/roles', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+                    },
+                    body: JSON.stringify(Object.fromEntries(formData))
+                });
+                
+                if (!response.ok) throw new Error('Failed to create role');
+                
+                showSuccess('Role created successfully');
+                hideAddRoleModal();
+                window.location.reload();
+            } catch (error) {
+                showError('Failed to create role: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        });
+
+        document.getElementById('addPermissionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                showLoading();
+                const formData = new FormData(e.target);
+                const response = await fetch('/api/permissions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+                    },
+                    body: JSON.stringify(Object.fromEntries(formData))
+                });
+                
+                if (!response.ok) throw new Error('Failed to create permission');
+                
+                showSuccess('Permission created successfully');
+                hideAddPermissionModal();
+                window.location.reload();
+            } catch (error) {
+                showError('Failed to create permission: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        });
+
+        // Add modal management functions
+        function showEditRoleModal() {
+            document.getElementById('editRoleModal').classList.remove('hidden');
+        }
+
+        function hideEditRoleModal() {
+            document.getElementById('editRoleModal').classList.add('hidden');
+        }
+
+        function showEditPermissionModal() {
+            document.getElementById('editPermissionModal').classList.remove('hidden');
+        }
+
+        function hideEditPermissionModal() {
+            document.getElementById('editPermissionModal').classList.add('hidden');
+        }
+
+        // Add form submission handlers
+        document.getElementById('editRoleForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                showLoading();
+                const formData = new FormData(e.target);
+                const roleId = formData.get('id');
+                
+                const response = await fetch(`/api/roles/${roleId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+                    },
+                    body: JSON.stringify(Object.fromEntries(formData))
+                });
+                
+                if (!response.ok) throw new Error('Failed to update role');
+                
+                showSuccess('Role updated successfully');
+                hideEditRoleModal();
+                window.location.reload();
+            } catch (error) {
+                showError('Failed to update role: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        });
+
+        document.getElementById('editPermissionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                showLoading();
+                const formData = new FormData(e.target);
+                const permissionId = formData.get('id');
+                
+                const response = await fetch(`/api/permissions/${permissionId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+                    },
+                    body: JSON.stringify(Object.fromEntries(formData))
+                });
+                
+                if (!response.ok) throw new Error('Failed to update permission');
+                
+                showSuccess('Permission updated successfully');
+                hideEditPermissionModal();
+                window.location.reload();
+            } catch (error) {
+                showError('Failed to update permission: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        });
+
+        // Add keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                hideAddRoleModal();
+                hideEditRoleModal();
+                hideAddPermissionModal();
+                hideEditPermissionModal();
+                hideConfirmationModal();
+            }
+        });
+
+        // Add form validation
+        function validateForm(form) {
+            const requiredFields = form.querySelectorAll('[required]');
+            let isValid = true;
+            
+            requiredFields.forEach(field => {
+                if (!field.value.trim()) {
+                    field.classList.add('border-red-500');
+                    isValid = false;
+                } else {
+                    field.classList.remove('border-red-500');
+                }
+            });
+            
+            return isValid;
+        }
+
+        // Add form validation to all forms
+        document.querySelectorAll('form').forEach(form => {
+            form.addEventListener('submit', (e) => {
+                if (!validateForm(form)) {
+                    e.preventDefault();
+                    showError('Please fill in all required fields');
+                }
+            });
+        });
+
+        // Add CSRF token meta tag
+        const meta = document.createElement('meta');
+        meta.name = 'csrf-token';
+        meta.content = '{{ csrf_token }}';
+        document.head.appendChild(meta);
+    </script>
+</body>
+</html> 

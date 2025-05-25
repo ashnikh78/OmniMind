@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title }} - OmniMind AI Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100">
+    <!-- Navigation (same as dashboard.html) -->
+    <nav class="bg-white shadow-lg">
+        <!-- ... navigation content ... -->
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- System Health Overview -->
+        <div class="bg-white shadow rounded-lg mb-8">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">
+                    System Health Overview
+                </h3>
+                <div class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
+                    {% for component, status in metrics.health.items() %}
+                    <div class="bg-gray-50 overflow-hidden shadow rounded-lg">
+                        <div class="px-4 py-5 sm:p-6">
+                            <dt class="text-sm font-medium text-gray-500 truncate">
+                                {{ component }}
+                            </dt>
+                            <dd class="mt-1 text-3xl font-semibold text-gray-900">
+                                {{ status.status }}
+                            </dd>
+                            <dd class="mt-1 text-sm text-gray-500">
+                                Latency: {{ status.latency_ms }}ms
+                            </dd>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Metrics -->
+        <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <!-- Response Time Distribution -->
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">
+                        Response Time Distribution
+                    </h3>
+                    <div class="mt-2">
+                        <canvas id="responseTimeChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error Rate Trend -->
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">
+                        Error Rate Trend
+                    </h3>
+                    <div class="mt-2">
+                        <canvas id="errorRateChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resource Usage -->
+        <div class="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <!-- CPU Usage -->
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">
+                        CPU Usage
+                    </h3>
+                    <div class="mt-2">
+                        <canvas id="cpuChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Memory Usage -->
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">
+                        Memory Usage
+                    </h3>
+                    <div class="mt-2">
+                        <canvas id="memoryChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Alerts -->
+        <div class="mt-8">
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:px-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">
+                        Active Alerts
+                    </h3>
+                </div>
+                <div class="border-t border-gray-200">
+                    <ul class="divide-y divide-gray-200">
+                        {% for alert in metrics.alerts %}
+                        <li class="px-4 py-4">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-exclamation-circle text-{{ alert.severity }}-500 text-2xl"></i>
+                                    </div>
+                                    <div class="ml-3">
+                                        <p class="text-sm font-medium text-gray-900">
+                                            {{ alert.type }}
+                                        </p>
+                                        <p class="text-sm text-gray-500">
+                                            {{ alert.message }}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="ml-4">
+                                    <span class="text-sm text-gray-500">
+                                        {{ alert.timestamp }}
+                                    </span>
+                                </div>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Initialize charts
+        const responseTimeCtx = document.getElementById('responseTimeChart').getContext('2d');
+        const errorRateCtx = document.getElementById('errorRateChart').getContext('2d');
+        const cpuCtx = document.getElementById('cpuChart').getContext('2d');
+        const memoryCtx = document.getElementById('memoryChart').getContext('2d');
+
+        // Response Time Distribution Chart
+        new Chart(responseTimeCtx, {
+            type: 'line',
+            data: {
+                labels: {{ metrics.performance.timestamps|tojson }},
+                datasets: [{
+                    label: 'Response Time (ms)',
+                    data: {{ metrics.performance.response_times|tojson }},
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        // Error Rate Trend Chart
+        new Chart(errorRateCtx, {
+            type: 'line',
+            data: {
+                labels: {{ metrics.performance.timestamps|tojson }},
+                datasets: [{
+                    label: 'Error Rate (%)',
+                    data: {{ metrics.performance.error_rates|tojson }},
+                    borderColor: 'rgb(255, 99, 132)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                }
+            }
+        });
+
+        // CPU Usage Chart
+        new Chart(cpuCtx, {
+            type: 'line',
+            data: {
+                labels: {{ metrics.resource_usage.timestamps|tojson }},
+                datasets: [{
+                    label: 'CPU Usage (%)',
+                    data: {{ metrics.resource_usage.cpu|tojson }},
+                    borderColor: 'rgb(255, 99, 132)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                }
+            }
+        });
+
+        // Memory Usage Chart
+        new Chart(memoryCtx, {
+            type: 'line',
+            data: {
+                labels: {{ metrics.resource_usage.timestamps|tojson }},
+                datasets: [{
+                    label: 'Memory Usage (%)',
+                    data: {{ metrics.resource_usage.memory|tojson }},
+                    borderColor: 'rgb(54, 162, 235)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html> 

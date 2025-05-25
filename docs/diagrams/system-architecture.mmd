@@ -1,0 +1,119 @@
+```mermaid
+graph TB
+    %% Main Components
+    subgraph Frontend["Frontend Layer"]
+        UI[User Interface]
+        Dashboard[Dashboard]
+        Analytics[Analytics UI]
+        SecurityUI[Security Dashboard]
+        MLUI[ML Management UI]
+    end
+
+    subgraph API["API Layer"]
+        Gateway[API Gateway]
+        Auth[Authentication]
+        RateLimit[Rate Limiting]
+        Validation[Request Validation]
+        WebSocket[WebSocket Server]
+    end
+
+    subgraph Core["Core Services"]
+        Security[Security System]
+        Conversation[Conversation Engine]
+        AnalyticsEngine[Analytics Engine]
+        Monitoring[Monitoring System]
+        ML[ML Model Management]
+        Backup[Backup System]
+        Compliance[Compliance Engine]
+        ThreatIntel[Threat Intelligence]
+    end
+
+    subgraph Security["Security Components"]
+        ThreatDetect[Threat Detection]
+        BehaviorAnalysis[Behavioral Analysis]
+        AccessControl[Access Control]
+        PolicyEnforcement[Policy Enforcement]
+        IncidentResponse[Incident Response]
+    end
+
+    subgraph ML["ML Components"]
+        ModelRegistry[Model Registry]
+        Training[Training Pipeline]
+        Deployment[Model Deployment]
+        Monitoring[Model Monitoring]
+        FeatureStore[Feature Store]
+    end
+
+    subgraph Monitoring["Monitoring Stack"]
+        Metrics[Prometheus]
+        Logging[ELK Stack]
+        Tracing[Jaeger]
+        Alerting[Alert Manager]
+        Grafana[Grafana]
+    end
+
+    subgraph Storage["Storage Layer"]
+        Database[(Database)]
+        Cache[(Cache)]
+        ObjectStore[(Object Store)]
+        BackupStore[(Backup Storage)]
+    end
+
+    %% External Systems
+    External[External Systems]
+    Users[Users]
+    Integrations[Integrations]
+
+    %% Connections
+    Users --> UI
+    UI --> Gateway
+    Gateway --> Auth
+    Auth --> RateLimit
+    RateLimit --> Validation
+    Validation --> Core
+
+    Core --> Security
+    Core --> ML
+    Core --> Monitoring
+    Core --> Storage
+
+    Security --> ThreatDetect
+    Security --> BehaviorAnalysis
+    Security --> AccessControl
+    Security --> PolicyEnforcement
+    Security --> IncidentResponse
+
+    ML --> ModelRegistry
+    ML --> Training
+    ML --> Deployment
+    ML --> Monitoring
+    ML --> FeatureStore
+
+    Monitoring --> Metrics
+    Monitoring --> Logging
+    Monitoring --> Tracing
+    Monitoring --> Alerting
+    Monitoring --> Grafana
+
+    External --> Gateway
+    Integrations --> Gateway
+
+    %% Styling
+    classDef frontend fill:#e1f5fe,stroke:#01579b
+    classDef api fill:#e8f5e9,stroke:#1b5e20
+    classDef core fill:#fff3e0,stroke:#e65100
+    classDef security fill:#fce4ec,stroke:#880e4f
+    classDef ml fill:#f3e5f5,stroke:#4a148c
+    classDef monitoring fill:#e8eaf6,stroke:#1a237e
+    classDef storage fill:#f5f5f5,stroke:#212121
+    classDef external fill:#fafafa,stroke:#616161
+
+    class Frontend,UI,Dashboard,Analytics,SecurityUI,MLUI frontend
+    class API,Gateway,Auth,RateLimit,Validation,WebSocket api
+    class Core,Security,Conversation,AnalyticsEngine,Monitoring,ML,Backup,Compliance,ThreatIntel core
+    class Security,ThreatDetect,BehaviorAnalysis,AccessControl,PolicyEnforcement,IncidentResponse security
+    class ML,ModelRegistry,Training,Deployment,Monitoring,FeatureStore ml
+    class Monitoring,Metrics,Logging,Tracing,Alerting,Grafana monitoring
+    class Storage,Database,Cache,ObjectStore,BackupStore storage
+    class External,Users,Integrations external
+``` 

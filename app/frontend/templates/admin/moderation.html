@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title }} - OmniMind AI Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100">
+    <!-- Navigation (same as dashboard.html) -->
+    <nav class="bg-white shadow-lg">
+        <!-- ... navigation content ... -->
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Moderation Overview -->
+        <div class="bg-white shadow rounded-lg mb-8">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">
+                    Moderation Overview
+                </h3>
+                <div class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-4">
+                    <!-- Total Flagged -->
+                    <div class="bg-gray-50 overflow-hidden shadow rounded-lg">
+                        <div class="px-4 py-5 sm:p-6">
+                            <dt class="text-sm font-medium text-gray-500 truncate">
+                                Total Flagged
+                            </dt>
+                            <dd class="mt-1 text-3xl font-semibold text-gray-900">
+                                {{ moderation_data.moderation_stats.total_flagged }}
+                            </dd>
+                        </div>
+                    </div>
+
+                    <!-- Pending Review -->
+                    <div class="bg-gray-50 overflow-hidden shadow rounded-lg">
+                        <div class="px-4 py-5 sm:p-6">
+                            <dt class="text-sm font-medium text-gray-500 truncate">
+                                Pending Review
+                            </dt>
+                            <dd class="mt-1 text-3xl font-semibold text-gray-900">
+                                {{ moderation_data.moderation_stats.pending_review }}
+                            </dd>
+                        </div>
+                    </div>
+
+                    <!-- Approved -->
+                    <div class="bg-gray-50 overflow-hidden shadow rounded-lg">
+                        <div class="px-4 py-5 sm:p-6">
+                            <dt class="text-sm font-medium text-gray-500 truncate">
+                                Approved
+                            </dt>
+                            <dd class="mt-1 text-3xl font-semibold text-gray-900">
+                                {{ moderation_data.moderation_stats.approved }}
+                            </dd>
+                        </div>
+                    </div>
+
+                    <!-- Rejected -->
+                    <div class="bg-gray-50 overflow-hidden shadow rounded-lg">
+                        <div class="px-4 py-5 sm:p-6">
+                            <dt class="text-sm font-medium text-gray-500 truncate">
+                                Rejected
+                            </dt>
+                            <dd class="mt-1 text-3xl font-semibold text-gray-900">
+                                {{ moderation_data.moderation_stats.rejected }}
+                            </dd>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Flagged Content -->
+        <div class="bg-white shadow rounded-lg mb-8">
+            <div class="px-4 py-5 sm:px-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">
+                    Flagged Content
+                </h3>
+            </div>
+            <div class="border-t border-gray-200">
+                <ul class="divide-y divide-gray-200">
+                    {% for content in moderation_data.flagged_content %}
+                    <li class="px-4 py-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-gray-900 truncate">
+                                    {{ content.title }}
+                                </p>
+                                <p class="text-sm text-gray-500">
+                                    {{ content.description }}
+                                </p>
+                                <div class="mt-2 flex items-center text-sm text-gray-500">
+                                    <i class="fas fa-flag text-{{ content.severity }}-500 mr-2"></i>
+                                    <span>Severity: {{ content.severity }}</span>
+                                    <span class="mx-2">•</span>
+                                    <span>Category: {{ content.category }}</span>
+                                </div>
+                            </div>
+                            <div class="ml-4 flex-shrink-0">
+                                <button class="bg-green-500 text-white px-3 py-1 rounded-md text-sm font-medium mr-2"
+                                        onclick="approveContent('{{ content.id }}')">
+                                    Approve
+                                </button>
+                                <button class="bg-red-500 text-white px-3 py-1 rounded-md text-sm font-medium"
+                                        onclick="rejectContent('{{ content.id }}')">
+                                    Reject
+                                </button>
+                            </div>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        <!-- Recent Decisions -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:px-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">
+                    Recent Decisions
+                </h3>
+            </div>
+            <div class="border-t border-gray-200">
+                <ul class="divide-y divide-gray-200">
+                    {% for decision in moderation_data.recent_decisions %}
+                    <li class="px-4 py-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-gray-900 truncate">
+                                    {{ decision.content_title }}
+                                </p>
+                                <p class="text-sm text-gray-500">
+                                    Decision: {{ decision.decision }}
+                                </p>
+                                <div class="mt-2 flex items-center text-sm text-gray-500">
+                                    <i class="fas fa-user text-gray-400 mr-2"></i>
+                                    <span>Moderator: {{ decision.moderator }}</span>
+                                    <span class="mx-2">•</span>
+                                    <span>Time: {{ decision.timestamp }}</span>
+                                </div>
+                            </div>
+                            <div class="ml-4">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                    {% if decision.decision == 'approved' %}
+                                        bg-green-100 text-green-800
+                                    {% else %}
+                                        bg-red-100 text-red-800
+                                    {% endif %}">
+                                    {{ decision.decision }}
+                                </span>
+                            </div>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Content moderation functions
+        async function approveContent(contentId) {
+            try {
+                const response = await fetch(`/api/moderation/approve/${contentId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (response.ok) {
+                    // Refresh the page or update UI
+                    window.location.reload();
+                } else {
+                    alert('Failed to approve content');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while approving content');
+            }
+        }
+
+        async function rejectContent(contentId) {
+            try {
+                const response = await fetch(`/api/moderation/reject/${contentId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (response.ok) {
+                    // Refresh the page or update UI
+                    window.location.reload();
+                } else {
+                    alert('Failed to reject content');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while rejecting content');
+            }
+        }
+    </script>
+</body>
+</html> 

@@ -1,0 +1,106 @@
+```mermaid
+graph TB
+    %% Main Security Components
+    subgraph Security["Security System"]
+        subgraph Auth["Authentication Layer"]
+            MFA[Multi-Factor Auth]
+            SSO[Single Sign-On]
+            OAuth[OAuth 2.0]
+            Biometric[Biometric Auth]
+            DeviceAuth[Device Auth]
+        end
+
+        subgraph Access["Access Control"]
+            RBAC[Role-Based Access]
+            ABAC[Attribute-Based Access]
+            Policy[Policy Engine]
+            RiskBased[Risk-Based Access]
+            ContextAware[Context-Aware Access]
+        end
+
+        subgraph Threat["Threat Detection"]
+            MLDetect[ML-based Detection]
+            Behavior[Behavioral Analysis]
+            Anomaly[Anomaly Detection]
+            Pattern[Pattern Recognition]
+            Intel[Threat Intelligence]
+        end
+
+        subgraph Monitor["Security Monitoring"]
+            RealTime[Real-time Monitoring]
+            Metrics[Security Metrics]
+            Alerts[Alert System]
+            Logging[Security Logging]
+            Audit[Audit Trail]
+        end
+
+        subgraph Response["Incident Response"]
+            AutoResponse[Automated Response]
+            Playbooks[Response Playbooks]
+            Forensics[Forensic Analysis]
+            Recovery[Recovery Procedures]
+            Reporting[Incident Reporting]
+        end
+
+        subgraph Compliance["Compliance"]
+            PolicyMgmt[Policy Management]
+            AuditLog[Audit Logging]
+            Reporting[Compliance Reporting]
+            Controls[Security Controls]
+            Validation[Compliance Validation]
+        end
+    end
+
+    %% External Components
+    Users[Users]
+    Devices[Devices]
+    External[External Systems]
+    Threats[Threat Sources]
+
+    %% Data Flow
+    Users --> Auth
+    Devices --> Auth
+    Auth --> Access
+    Access --> Threat
+    Threat --> Monitor
+    Monitor --> Response
+    Response --> Compliance
+
+    External --> Threat
+    Threats --> Threat
+
+    %% Security Features
+    subgraph Features["Security Features"]
+        Encryption[Data Encryption]
+        KeyMgmt[Key Management]
+        Backup[Secure Backup]
+        Network[Network Security]
+        AppSec[Application Security]
+    end
+
+    %% Connections to Features
+    Auth --> Encryption
+    Access --> KeyMgmt
+    Monitor --> Backup
+    Threat --> Network
+    Response --> AppSec
+
+    %% Styling
+    classDef auth fill:#e1f5fe,stroke:#01579b
+    classDef access fill:#e8f5e9,stroke:#1b5e20
+    classDef threat fill:#fce4ec,stroke:#880e4f
+    classDef monitor fill:#fff3e0,stroke:#e65100
+    classDef response fill:#f3e5f5,stroke:#4a148c
+    classDef compliance fill:#e8eaf6,stroke:#1a237e
+    classDef features fill:#f5f5f5,stroke:#212121
+    classDef external fill:#fafafa,stroke:#616161
+
+    class Auth,MFA,SSO,OAuth,Biometric,DeviceAuth auth
+    class Access,RBAC,ABAC,Policy,RiskBased,ContextAware access
+    class Threat,MLDetect,Behavior,Anomaly,Pattern,Intel threat
+    class Monitor,RealTime,Metrics,Alerts,Logging,Audit monitor
+    class Response,AutoResponse,Playbooks,Forensics,Recovery,Reporting response
+    class Compliance,PolicyMgmt,AuditLog,Reporting,Controls,Validation compliance
+    class Features,Encryption,KeyMgmt,Backup,Network,AppSec features
+    class External,Users,Devices,Threats external
+``` 

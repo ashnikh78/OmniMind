@@ -1,0 +1,105 @@
+```mermaid
+graph TB
+    %% Main ML Components
+    subgraph ML["ML Model Management"]
+        subgraph Registry["Model Registry"]
+            Version[Version Control]
+            Metadata[Model Metadata]
+            Artifacts[Model Artifacts]
+            Dependencies[Model Dependencies]
+            Config[Model Configs]
+        end
+
+        subgraph Training["Training Pipeline"]
+            DataPrep[Data Preparation]
+            FeatureEng[Feature Engineering]
+            ModelTrain[Model Training]
+            Validation[Model Validation]
+            Testing[Model Testing]
+        end
+
+        subgraph Deployment["Model Deployment"]
+            Serving[Model Serving]
+            Scaling[Auto Scaling]
+            Monitoring[Performance Monitoring]
+            Rollback[Version Rollback]
+            A_B[A/B Testing]
+        end
+
+        subgraph Monitoring["Model Monitoring"]
+            Metrics[Performance Metrics]
+            Drift[Data Drift]
+            Bias[Bias Detection]
+            Usage[Usage Analytics]
+            Health[Health Checks]
+        end
+
+        subgraph Feature["Feature Store"]
+            Features[Feature Registry]
+            Pipeline[Feature Pipeline]
+            Serving[Feature Serving]
+            Validation[Feature Validation]
+            Version[Feature Versioning]
+        end
+
+        subgraph Resources["Resource Management"]
+            Compute[Compute Resources]
+            Storage[Storage Resources]
+            Network[Network Resources]
+            Scaling[Auto Scaling]
+            Optimization[Resource Optimization]
+        end
+    end
+
+    %% External Components
+    Data[Data Sources]
+    Users[Users]
+    Applications[Applications]
+    Monitoring[Monitoring System]
+
+    %% Data Flow
+    Data --> Training
+    Training --> Registry
+    Registry --> Deployment
+    Deployment --> Monitoring
+    Monitoring --> Training
+
+    Users --> Applications
+    Applications --> Deployment
+    Monitoring --> Monitoring
+
+    %% ML Features
+    subgraph Features["ML Features"]
+        Security[Model Security]
+        Compliance[ML Compliance]
+        Governance[ML Governance]
+        Quality[Quality Control]
+        Optimization[Performance Optimization]
+    end
+
+    %% Connections to Features
+    Registry --> Security
+    Training --> Compliance
+    Deployment --> Governance
+    Monitoring --> Quality
+    Resources --> Optimization
+
+    %% Styling
+    classDef registry fill:#e1f5fe,stroke:#01579b
+    classDef training fill:#e8f5e9,stroke:#1b5e20
+    classDef deployment fill:#fce4ec,stroke:#880e4f
+    classDef monitoring fill:#fff3e0,stroke:#e65100
+    classDef feature fill:#f3e5f5,stroke:#4a148c
+    classDef resources fill:#e8eaf6,stroke:#1a237e
+    classDef features fill:#f5f5f5,stroke:#212121
+    classDef external fill:#fafafa,stroke:#616161
+
+    class Registry,Version,Metadata,Artifacts,Dependencies,Config registry
+    class Training,DataPrep,FeatureEng,ModelTrain,Validation,Testing training
+    class Deployment,Serving,Scaling,Monitoring,Rollback,A_B deployment
+    class Monitoring,Metrics,Drift,Bias,Usage,Health monitoring
+    class Feature,Features,Pipeline,Serving,Validation,Version feature
+    class Resources,Compute,Storage,Network,Scaling,Optimization resources
+    class Features,Security,Compliance,Governance,Quality,Optimization features
+    class External,Data,Users,Applications,Monitoring external
+``` 
