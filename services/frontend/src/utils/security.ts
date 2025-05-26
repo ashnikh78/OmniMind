@@ -19,6 +19,7 @@ declare global {
   namespace NodeJS {
     interface ProcessEnv {
       REACT_APP_ENCRYPTION_KEY?: string;
+      REACT_APP_API_URL?: string;
     }
   }
 }
@@ -32,6 +33,7 @@ class SecurityManager {
   private readonly SECURITY_EVENTS_KEY = 'security_events';
   private readonly MAX_EVENTS = 1000;
   private readonly cspManager: CSPManager;
+  private readonly API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
   constructor() {
     this.cspManager = CSPManager.getInstance();
@@ -86,7 +88,7 @@ class SecurityManager {
       const tokenData = await this.getTokenData();
       if (!tokenData) return false;
 
-      const response = await fetch('/api/v1/auth/refresh', {
+      const response = await fetch(`${this.API_BASE_URL}/api/v1/auth/refresh`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -109,7 +111,7 @@ class SecurityManager {
   // CSRF Protection
   async getCsrfToken(): Promise<string> {
     try {
-      const response = await fetch('/api/v1/csrf-token', {
+      const response = await fetch(`${this.API_BASE_URL}/api/v1/csrf-token`, {
         credentials: 'include'
       });
       const { token } = await response.json();

@@ -125,7 +125,7 @@ class ApiClient {
 }
 
 const apiClient = new ApiClient(
-  process.env.REACT_APP_API_URL || 'http://localhost',
+  process.env.REACT_APP_API_URL || 'http://localhost:8000',
   {
     timeout: 30000,
   }

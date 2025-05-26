@@ -2,7 +2,7 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 
 // Update base URLs to use nginx proxy
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 const WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost';
 
 // Create axios instance with default config

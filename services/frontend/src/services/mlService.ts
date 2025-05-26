@@ -142,7 +142,7 @@ class MLService {
     this.inferenceQueue.set(requestId, request);
 
     try {
-      const baseURL = process.env.REACT_APP_API_URL || 'http://localhost';
+      const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
       const response = await fetch(`${baseURL}/api/v1/ml/inference/${request.modelId}/stream`, {
         method: 'POST',
         headers: {

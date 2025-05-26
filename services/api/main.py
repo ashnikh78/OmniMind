@@ -18,6 +18,8 @@ from passlib.context import CryptContext
 from app.core.model_orchestrator import OllamaModel
 import ollama
 import torch
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
 
 # Configure logging
 logging.basicConfig(
@@ -45,17 +47,23 @@ class User(BaseModel):
 REQUEST_COUNT = Counter('http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
 REQUEST_LATENCY = Histogram('http_request_duration_seconds', 'HTTP request latency', ['method', 'endpoint'])
 
-app = FastAPI(title="OmniMind API Gateway")
+app = FastAPI(
+    title="OmniMind API Gateway",
+    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+)
 
 # CORS middleware with proper configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"]
 )
+
+# OAuth2 scheme for token authentication
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
 
 # Update Redis client initialization with better error handling
 def init_redis_client(max_retries=3, retry_delay=1):
@@ -139,58 +147,24 @@ class UserPresence:
 user_presence = UserPresence()
 
 # User authentication middleware with improved error handling
-async def get_current_user(request: Request):
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     try:
-        auth_header = request.headers.get('Authorization')
-        logger.info(f"Processing request with auth header: {auth_header}")
-        
-        if not auth_header or not auth_header.startswith('Bearer '):
-            logger.warning("Invalid auth header format")
-            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-        
-        token = auth_header.split(' ')[1]
-        logger.debug(f"Processing token: {token[:10]}...")
-        
-        try:
-            # Decode token with verification
-            payload = jwt.decode(
-                token,
-                os.getenv("JWT_SECRET", "your-secret-key"),
-                algorithms=["HS256"]
-            )
-            logger.debug(f"Decoded payload: {payload}")
-            
-            user_id = payload.get("sub")
-            if not user_id:
-                logger.warning("No user_id in token payload")
-                raise HTTPException(status_code=401, detail="Invalid token")
-            
-            # Get user data from Redis
-            user_data = redis_client.get(f"user:{user_id}")
-            logger.debug(f"User data from Redis: {user_data}")
-            
-            if not user_data:
-                logger.warning(f"No user data found for user_id: {user_id}")
-                raise HTTPException(status_code=401, detail="User not found")
-            
-            return json.loads(user_data)
-        except jwt.ExpiredSignatureError:
-            logger.warning("Token has expired")
-            raise HTTPException(status_code=401, detail="Token has expired")
-        except jwt.InvalidTokenError as e:
-            logger.warning(f"Invalid token error: {str(e)}")
-            raise HTTPException(status_code=401, detail="Invalid token")
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON decode error: {str(e)}")
-            raise HTTPException(status_code=500, detail="Invalid user data format")
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        logger.error(f"Unexpected error in get_current_user: {str(e)}")
-        logger.error(f"Error type: {type(e)}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        username: str = payload.get("username")
+        if username is None:
+            raise credentials_exception
+    except jwt.JWTError:
+        raise credentials_exception
+    
+    user = db.query(User).filter(User.username == username).first()
+    if user is None:
+        raise credentials_exception
+    return user
 
 # WebSocket connection manager
 class ConnectionManager:
