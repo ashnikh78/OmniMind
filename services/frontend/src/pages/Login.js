@@ -17,6 +17,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { Link as RouterLink } from 'react-router-dom';
 
 function Login() {
   const navigate = useNavigate();
@@ -145,16 +146,14 @@ function Login() {
             >
               Forgot password?
             </Link>
-            <Typography variant="body2" color="text.secondary">
-              Don't have an account?{' '}
-              <Link
-                component="button"
-                variant="body2"
-                onClick={() => navigate('/register')}
-              >
-                Sign up
-              </Link>
-            </Typography>
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="body2" color="text.secondary" align="center">
+                Don&apos;t have an account?{' '}
+                <Link component={RouterLink} to="/register" variant="body2">
+                  Sign Up
+                </Link>
+              </Typography>
+            </Box>
           </Box>
         </Box>
       </Paper>

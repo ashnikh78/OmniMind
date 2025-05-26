@@ -30,7 +30,7 @@ export const AuthProvider = ({ children }) => {
 
   const fetchUserData = async () => {
     try {
-      const response = await axios.get('/api/auth/me');
+      const response = await axios.get('/api/v1/auth/me');
       setUser(response.data);
     } catch (error) {
       console.error('Error fetching user data:', error);
@@ -41,18 +41,27 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = async (credentials) => {
-    const response = await axios.post('/api/auth/login', credentials);
-    const { token, user } = response.data;
-    
-    localStorage.setItem('token', token);
-    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    setUser(user);
-    
-    return user;
+    try {
+        const response = await axios.post('/api/v1/auth/login', credentials);
+        const { access_token, user } = response.data;
+        
+        if (!access_token) {
+            throw new Error('No access token received');
+        }
+        
+        localStorage.setItem('token', access_token);
+        axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+        setUser(user);
+        
+        return user;
+    } catch (error) {
+        console.error('Login error:', error);
+        throw error;
+    }
   };
 
   const register = async (userData) => {
-    const response = await axios.post('/api/auth/register', userData);
+    const response = await axios.post('/api/v1/auth/register', userData);
     const { token, user } = response.data;
     
     localStorage.setItem('token', token);
@@ -69,11 +78,11 @@ export const AuthProvider = ({ children }) => {
   };
 
   const forgotPassword = async (email) => {
-    await axios.post('/api/auth/forgot-password', { email });
+    await axios.post('/api/v1/auth/forgot-password', { email });
   };
 
   const resetPassword = async (token, newPassword) => {
-    await axios.post('/api/auth/reset-password', {
+    await axios.post('/api/v1/auth/reset-password', {
       token,
       new_password: newPassword,
     });

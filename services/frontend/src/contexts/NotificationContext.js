@@ -1,15 +1,19 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { notificationsAPI } from '../services/api';
+import { notificationAPI } from '../services/api';
 import { wsManager } from '../services/api';
 import { toast } from 'react-toastify';
 
 const NotificationContext = createContext();
 
-export function useNotifications() {
-  return useContext(NotificationContext);
-}
+export const useNotifications = () => {
+  const context = useContext(NotificationContext);
+  if (!context) {
+    throw new Error('useNotifications must be used within a NotificationProvider');
+  }
+  return context;
+};
 
-export function NotificationProvider({ children }) {
+export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -60,12 +64,13 @@ export function NotificationProvider({ children }) {
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      const response = await notificationsAPI.getNotifications();
-      setNotifications(response);
-      setUnreadCount(response.filter(n => !n.read).length);
-    } catch (error) {
+      const response = await notificationAPI.getNotifications();
+      setNotifications(response.data);
+      setUnreadCount(response.data.filter(n => !n.read).length);
+      setError(null);
+    } catch (err) {
       setError('Failed to fetch notifications');
-      console.error('Error fetching notifications:', error);
+      toast.error('Failed to fetch notifications');
     } finally {
       setLoading(false);
     }
@@ -73,62 +78,52 @@ export function NotificationProvider({ children }) {
 
   const fetchPreferences = async () => {
     try {
-      const response = await notificationsAPI.getPreferences();
+      const response = await notificationAPI.getPreferences();
       setPreferences(response);
     } catch (error) {
       console.error('Error fetching notification preferences:', error);
     }
   };
 
-  const markAsRead = async (notificationId) => {
+  const markAsRead = async (id) => {
     try {
-      await notificationsAPI.markAsRead(notificationId);
-      setNotifications((prev) =>
-        prev.map((n) =>
-          n.id === notificationId ? { ...n, read: true } : n
-        )
-      );
+      await notificationAPI.markAsRead(id);
+      setNotifications(notifications.map(notification =>
+        notification.id === id ? { ...notification, read: true } : notification
+      ));
       setUnreadCount((prev) => Math.max(0, prev - 1));
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
+    } catch (err) {
+      toast.error('Failed to mark notification as read');
     }
   };
 
   const markAllAsRead = async () => {
     try {
-      await Promise.all(
-        notifications
-          .filter((n) => !n.read)
-          .map((n) => notificationsAPI.markAsRead(n.id))
-      );
-      setNotifications((prev) =>
-        prev.map((n) => ({ ...n, read: true }))
-      );
+      await notificationAPI.markAllAsRead();
+      setNotifications(notifications.map(notification => ({ ...notification, read: true })));
       setUnreadCount(0);
-    } catch (error) {
-      console.error('Error marking all notifications as read:', error);
+    } catch (err) {
+      toast.error('Failed to mark all notifications as read');
     }
   };
 
-  const deleteNotification = async (notificationId) => {
+  const deleteNotification = async (id) => {
     try {
-      await notificationsAPI.deleteNotification(notificationId);
-      setNotifications((prev) =>
-        prev.filter((n) => n.id !== notificationId)
-      );
+      await notificationAPI.deleteNotification(id);
+      setNotifications(notifications.filter(notification => notification.id !== id));
       setUnreadCount((prev) =>
-        notifications.find((n) => n.id === notificationId)?.read
+        notifications.find((n) => n.id === id)?.read
           ? prev
           : Math.max(0, prev - 1)
       );
-    } catch (error) {
-      console.error('Error deleting notification:', error);
+    } catch (err) {
+      toast.error('Failed to delete notification');
     }
   };
 
   const updatePreferences = async (newPreferences) => {
     try {
-      await notificationsAPI.updatePreferences(newPreferences);
+      await notificationAPI.updatePreferences(newPreferences);
       setPreferences(newPreferences);
     } catch (error) {
       console.error('Error updating notification preferences:', error);
@@ -141,11 +136,11 @@ export function NotificationProvider({ children }) {
     loading,
     error,
     preferences,
+    fetchNotifications,
     markAsRead,
     markAllAsRead,
     deleteNotification,
     updatePreferences,
-    refreshNotifications: fetchNotifications,
   };
 
   return (
@@ -153,4 +148,4 @@ export function NotificationProvider({ children }) {
       {children}
     </NotificationContext.Provider>
   );
-} 
+}; 

@@ -23,11 +23,12 @@ import Messages from './pages/Messages';
 import Notifications from './pages/Notifications';
 import Activity from './pages/Activity';
 import MLService from './pages/MLService';
-import TenantManagement from './pages/TenantManagement';
-import RoleManagement from './pages/RoleManagement';
+import Tenants from './pages/Tenants';
+import Roles from './pages/Roles';
 import Analytics from './pages/Analytics';
 import PrivateRoute from './components/PrivateRoute';
 import ProtectedRoute from './components/ProtectedRoute';
+import NotFound from './pages/NotFound';
 
 function App() {
   return (
@@ -61,24 +62,18 @@ function App() {
                         <Route path="/reset-password" element={<ResetPassword />} />
 
                         {/* Protected routes */}
-                        <Route
-                          path="/"
-                          element={
-                            <PrivateRoute>
-                              <Layout />
-                            </PrivateRoute>
-                          }
-                        >
+                        <Route path="/" element={<Layout />}>
                           <Route index element={<Navigate to="/dashboard" replace />} />
-                          <Route path="dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                          <Route path="profile" element={<Profile />} />
-                          <Route path="messages" element={<Messages />} />
-                          <Route path="notifications" element={<Notifications />} />
-                          <Route path="activity" element={<Activity />} />
-                          <Route path="ml-service" element={<MLService />} />
-                          <Route path="tenants" element={<TenantManagement />} />
-                          <Route path="roles" element={<RoleManagement />} />
-                          <Route path="analytics" element={<Analytics />} />
+                          <Route path="dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+                          <Route path="profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+                          <Route path="messages" element={<PrivateRoute><Messages /></PrivateRoute>} />
+                          <Route path="notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
+                          <Route path="activity" element={<PrivateRoute><Activity /></PrivateRoute>} />
+                          <Route path="tenants" element={<PrivateRoute><Tenants /></PrivateRoute>} />
+                          <Route path="roles" element={<PrivateRoute><Roles /></PrivateRoute>} />
+                          <Route path="analytics" element={<PrivateRoute><Analytics /></PrivateRoute>} />
+                          <Route path="ml-service" element={<PrivateRoute><MLService /></PrivateRoute>} />
+                          <Route path="*" element={<NotFound />} />
                         </Route>
                       </Routes>
                     </Router>

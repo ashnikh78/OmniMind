@@ -1,12 +1,13 @@
 import axios from 'axios';
 import { toast } from 'react-toastify';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-const WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost:8000';
+// Update base URLs to use nginx proxy
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost';
+const WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost';
 
 // Create axios instance with default config
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -115,7 +116,8 @@ class WebSocketManager {
   }
 }
 
-export const wsManager = new WebSocketManager();
+// Create WebSocket manager instance
+const wsManager = new WebSocketManager();
 
 // Add request interceptor for authentication
 api.interceptors.request.use(
@@ -174,172 +176,172 @@ api.interceptors.response.use(
 );
 
 // Auth API
-export const authAPI = {
-  login: async (email, password) => {
-    const response = await api.post('/api/v1/auth/login', { email, password });
-    return response.data;
-  },
-  getProfile: async () => {
-    const response = await api.get('/api/v1/auth/me');
-    return response.data;
-  },
-  createUser: async (userData) => {
-    const response = await api.post('/api/v1/users', userData);
-    return response.data;
-  },
-  createTestUser: async () => {
-    const response = await api.post('/api/v1/users', {
-      email: 'test@example.com',
-      password: 'test123',
-      role: 'user'
-    });
-    return response.data;
-  }
+const authAPI = {
+  login: (credentials) => api.post('/api/v1/auth/login', credentials),
+  register: (userData) => api.post('/api/v1/auth/register', userData),
+  forgotPassword: (email) => api.post('/api/v1/auth/forgot-password', { email }),
+  resetPassword: (data) => api.post('/api/v1/auth/reset-password', data),
+  verifyToken: () => api.get('/api/v1/auth/verify'),
 };
 
-// Users API
-export const usersAPI = {
-  getUsers: () => api.get('/api/v1/users'),
-  getUser: (id) => api.get(`/api/v1/users/${id}`),
-  createUser: (user) => api.post('/api/v1/users', user),
-  updateUser: (id, user) => api.put(`/api/v1/users/${id}`, user),
-  deleteUser: (id) => api.delete(`/api/v1/users/${id}`),
+// User API
+const userAPI = {
+  getProfile: () => api.get('/api/v1/users/profile'),
+  updateProfile: (data) => api.put('/api/v1/users/profile', data),
+  changePassword: (data) => api.post('/api/v1/users/change-password', data),
 };
 
-// Analytics API
-export const analyticsAPI = {
-  getMetrics: () => api.get('/api/analytics/metrics'),
-  getRealtimeAnalytics: () => api.get('/api/analytics/realtime'),
-  getEnhancedAnalytics: () => api.get('/api/analytics/enhanced'),
-  getMetricHistory: (metric, timeRange) => api.get(`/api/analytics/metrics/${metric}/history`, { params: { timeRange } }),
-  getCustomReport: (params) => api.post('/api/analytics/reports/custom', params),
-  exportAnalytics: (format) => api.get('/api/analytics/export', { params: { format } }),
+// Activity API
+const activityAPI = {
+  getActivities: (params) => api.get('/api/v1/activities', { params }),
+  getActivity: (id) => api.get(`/api/v1/activities/${id}`),
+  createActivity: (data) => api.post('/api/v1/activities', data),
+  updateActivity: (id, data) => api.put(`/api/v1/activities/${id}`, data),
+  deleteActivity: (id) => api.delete(`/api/v1/activities/${id}`),
 };
 
-// Storage API
-export const storageAPI = {
-  getFiles: () => api.get('/storage/files'),
-  uploadFile: (file) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    return api.post('/storage/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-  },
-  deleteFile: (id) => api.delete(`/storage/files/${id}`),
-  downloadFile: (id) => api.get(`/storage/files/${id}/download`),
+// Notification API
+const notificationAPI = {
+  getNotifications: (params) => api.get('/api/v1/notifications', { params }),
+  markAsRead: (id) => api.put(`/api/v1/notifications/${id}/read`),
+  markAllAsRead: () => api.put('/api/v1/notifications/read-all'),
+  deleteNotification: (id) => api.delete(`/api/v1/notifications/${id}`),
 };
 
-// Settings API
-export const settingsAPI = {
-  getSettings: () => api.get('/settings'),
-  updateSettings: (settings) => api.put('/settings', settings),
-};
-
-// Notifications API
-export const notificationsAPI = {
-  getNotifications: () => api.get('/notifications'),
-  markAsRead: (id) => api.put(`/notifications/${id}/read`),
-  deleteNotification: (id) => api.delete(`/notifications/${id}`),
-  updatePreferences: (preferences) => api.put('/notifications/preferences', preferences),
-};
-
-// Security API
-export const securityAPI = {
-  getSecuritySettings: () => api.get('/security/settings'),
-  updateSecuritySettings: (settings) => api.put('/security/settings', settings),
-  getAuditLogs: () => api.get('/security/audit-logs'),
-  getApiKeys: () => api.get('/security/api-keys'),
-  createApiKey: (data) => api.post('/security/api-keys', data),
-  deleteApiKey: (id) => api.delete(`/security/api-keys/${id}`),
-};
-
-// Chat API
-export const chatAPI = {
-  sendMessage: (message) => api.post('/api/chat/messages', message),
-  getHistory: (limit = 50) => api.get('/api/chat/history', { params: { limit } }),
-  getMessage: (messageId) => api.get(`/api/chat/messages/${messageId}`),
-};
-
-// Document API
-export const documentAPI = {
-  createDocument: (document) => api.post('/api/documents', document),
-  getDocument: (documentId) => api.get(`/api/documents/${documentId}`),
-  saveDocument: (document) => api.post('/api/documents/save', document),
-  getHistory: (documentId, limit = 50) => api.get(`/api/documents/${documentId}/history`, { params: { limit } }),
-  addCollaborator: (documentId, collaborator) => api.post('/api/documents/collaborators', { documentId, collaborator }),
-  removeCollaborator: (documentId, collaboratorId) => api.delete(`/api/documents/collaborators/${documentId}/${collaboratorId}`),
-};
-
-// Events API
-export const eventsAPI = {
-  getEvents: async (limit = 10) => {
-    const response = await api.get('/api/events', { params: { limit } });
-    return response.data;
-  },
-  createEvent: async (eventData) => {
-    const response = await api.post('/api/events', eventData);
-    return response.data;
-  }
-};
-
-// Presence API
-export const presenceAPI = {
-  getOnlineUsers: async () => {
-    const response = await api.get('/api/presence');
-    return response.data;
-  }
-};
-
-// ML Service API
-export const mlAPI = {
-  async inference(request) {
-    const response = await axios.post('/api/ml/inference', request);
-    return response.data;
-  },
-
-  async getMetrics(modelName) {
-    const response = await axios.get(`/api/ml/metrics/${modelName}`);
-    return response.data;
-  },
-
-  async listModels() {
-    const response = await axios.get('/api/ml/models');
-    return response.data;
-  },
-
-  async getModelConfig(modelName) {
-    const response = await axios.get(`/api/ml/models/${modelName}`);
-    return response.data;
-  },
+// Message API
+const messageAPI = {
+  getMessages: (params) => api.get('/api/v1/messages', { params }),
+  getMessage: (id) => api.get(`/api/v1/messages/${id}`),
+  sendMessage: (data) => api.post('/api/v1/messages', data),
+  updateMessage: (id, data) => api.put(`/api/v1/messages/${id}`, data),
+  deleteMessage: (id) => api.delete(`/api/v1/messages/${id}`),
 };
 
 // Tenant API
-export const tenantAPI = {
-  getTenants: () => api.get('/api/tenants'),
-  getTenant: (id) => api.get(`/api/tenants/${id}`),
-  createTenant: (tenant) => api.post('/api/tenants', tenant),
-  updateTenant: (id, tenant) => api.put(`/api/tenants/${id}`, tenant),
-  deleteTenant: (id) => api.delete(`/api/tenants/${id}`),
-  switchTenant: (id) => api.post(`/api/tenants/${id}/switch`),
-  getTenantSettings: (id) => api.get(`/api/tenants/${id}/settings`),
-  updateTenantSettings: (id, settings) => api.put(`/api/tenants/${id}/settings`, settings),
+const tenantAPI = {
+  getTenants: (params) => api.get('/api/v1/tenants', { params }),
+  getTenant: (id) => api.get(`/api/v1/tenants/${id}`),
+  createTenant: (data) => api.post('/api/v1/tenants', data),
+  updateTenant: (id, data) => api.put(`/api/v1/tenants/${id}`, data),
+  deleteTenant: (id) => api.delete(`/api/v1/tenants/${id}`),
+};
+
+// Role API
+const roleAPI = {
+  getRoles: (params) => api.get('/api/v1/rbac/roles', { params }),
+  getRole: (id) => api.get(`/api/v1/rbac/roles/${id}`),
+  createRole: (data) => api.post('/api/v1/rbac/roles', data),
+  updateRole: (id, data) => api.put(`/api/v1/rbac/roles/${id}`, data),
+  deleteRole: (id) => api.delete(`/api/v1/rbac/roles/${id}`),
+};
+
+// Analytics API
+const analyticsAPI = {
+  getAnalytics: (params) => api.get('/api/v1/analytics', { params }),
+  getMetrics: (params) => api.get('/api/v1/analytics/metrics', { params }),
+  getTrends: (params) => api.get('/api/v1/analytics/trends', { params }),
+  getPerformance: (params) => api.get('/api/v1/analytics/performance', { params }),
+  getUsage: (params) => api.get('/api/v1/analytics/usage', { params }),
+  getDashboardData: () => api.get('/api/v1/analytics/dashboard'),
+};
+
+// ML Service API
+const mlServiceAPI = {
+  getModels: () => api.get('/api/v1/ml/models'),
+  getModel: (id) => api.get(`/api/v1/ml/models/${id}`),
+  createModel: (data) => api.post('/api/v1/ml/models', data),
+  updateModel: (id, data) => api.put(`/api/v1/ml/models/${id}`, data),
+  deleteModel: (id) => api.delete(`/api/v1/ml/models/${id}`),
+  generateResponse: (data) => api.post('/api/v1/ml/generate', data),
+  streamResponse: (data) => api.post('/api/v1/ml/stream', data),
+};
+
+// Dashboard API
+const dashboardAPI = {
+  getDashboardData: () => api.get('/api/v1/dashboard'),
+  getRecentActivity: (params) => api.get('/api/v1/dashboard/activity', { params }),
+  getStats: () => api.get('/api/v1/dashboard/stats'),
 };
 
 // RBAC API
-export const rbacAPI = {
-  getRoles: () => api.get('/api/rbac/roles'),
-  getRole: (id) => api.get(`/api/rbac/roles/${id}`),
-  createRole: (role) => api.post('/api/rbac/roles', role),
-  updateRole: (id, role) => api.put(`/api/rbac/roles/${id}`, role),
-  deleteRole: (id) => api.delete(`/api/rbac/roles/${id}`),
-  getPermissions: () => api.get('/api/rbac/permissions'),
-  getUserRoles: () => api.get('/api/rbac/user/roles'),
-  assignRole: (userId, roleId) => api.post(`/api/rbac/users/${userId}/roles`, { roleId }),
-  removeRole: (userId, roleId) => api.delete(`/api/rbac/users/${userId}/roles/${roleId}`),
-  getRolePermissions: (roleId) => api.get(`/api/rbac/roles/${roleId}/permissions`),
+const rbacAPI = {
+  getRoles: (params) => api.get('/api/v1/rbac/roles', { params }),
+  getRole: (id) => api.get(`/api/v1/rbac/roles/${id}`),
+  createRole: (data) => api.post('/api/v1/rbac/roles', data),
+  updateRole: (id, data) => api.put(`/api/v1/rbac/roles/${id}`, data),
+  deleteRole: (id) => api.delete(`/api/v1/rbac/roles/${id}`),
+  getPermissions: () => api.get('/api/v1/rbac/permissions'),
+  getUserRoles: () => api.get('/api/v1/rbac/user/roles'),
+  assignRole: (userId, roleId) => api.post(`/api/v1/rbac/users/${userId}/roles`, { roleId }),
+  removeRole: (userId, roleId) => api.delete(`/api/v1/rbac/users/${userId}/roles/${roleId}`),
+  getRolePermissions: (roleId) => api.get(`/api/v1/rbac/roles/${roleId}/permissions`),
+  updateRolePermissions: (roleId, permissions) => api.put(`/api/v1/rbac/roles/${roleId}/permissions`, { permissions }),
 };
 
-export default api; 
+// Profile API
+const profileAPI = {
+  getProfile: () => api.get('/api/v1/profile'),
+  updateProfile: (data) => api.put('/api/v1/profile', data),
+  updateAvatar: (formData) => api.post('/api/v1/profile/avatar', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  }),
+  changePassword: (data) => api.post('/api/v1/profile/password', data),
+  getPreferences: () => api.get('/api/v1/profile/preferences'),
+  updatePreferences: (data) => api.put('/api/v1/profile/preferences', data),
+};
+
+// Messages API
+const messagesAPI = {
+  getMessages: (params) => api.get('/api/v1/messages', { params }),
+  getMessage: (id) => api.get(`/api/v1/messages/${id}`),
+  sendMessage: (data) => api.post('/api/v1/messages', data),
+  updateMessage: (id, data) => api.put(`/api/v1/messages/${id}`, data),
+  deleteMessage: (id) => api.delete(`/api/v1/messages/${id}`),
+  markAsRead: (id) => api.put(`/api/v1/messages/${id}/read`),
+  getConversations: () => api.get('/api/v1/messages/conversations'),
+  getConversation: (id) => api.get(`/api/v1/messages/conversations/${id}`),
+};
+
+// Chat API
+const chatAPI = {
+  sendMessage: (data) => api.post('/api/v1/chat/messages', data),
+  getHistory: (params) => api.get('/api/v1/chat/history', { params }),
+  getMessage: (id) => api.get(`/api/v1/chat/messages/${id}`),
+  deleteMessage: (id) => api.delete(`/api/v1/chat/messages/${id}`),
+  getConversations: () => api.get('/api/v1/chat/conversations'),
+  getConversation: (id) => api.get(`/api/v1/chat/conversations/${id}`),
+  markAsRead: (id) => api.put(`/api/v1/chat/messages/${id}/read`),
+  getOnlineUsers: () => api.get('/api/v1/chat/online-users'),
+};
+
+// Ollama API
+const ollamaAPI = {
+  getModels: () => api.get('/api/v1/ollama/models'),
+  chat: (data) => api.post('/api/v1/ollama/chat', data),
+  pullModel: (modelName) => api.post(`/api/v1/ollama/models/${modelName}/pull`),
+  deleteModel: (modelName) => api.delete(`/api/v1/ollama/models/${modelName}`),
+  getModelStatus: (modelName) => api.get(`/api/v1/ollama/models/${modelName}/status`),
+};
+
+// Export everything
+export {
+  api,
+  wsManager,
+  authAPI,
+  userAPI,
+  activityAPI,
+  notificationAPI,
+  messageAPI,
+  tenantAPI,
+  roleAPI,
+  analyticsAPI,
+  mlServiceAPI,
+  dashboardAPI,
+  rbacAPI,
+  profileAPI,
+  messagesAPI,
+  chatAPI,
+  ollamaAPI
+}; 

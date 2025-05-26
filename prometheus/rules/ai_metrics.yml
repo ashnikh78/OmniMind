@@ -1,0 +1,47 @@
+groups:
+  - name: ai_metrics
+    rules:
+      - alert: HighModelLatency
+        expr: rate(ai_model_inference_duration_seconds_sum[5m]) / rate(ai_model_inference_duration_seconds_count[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High model inference latency"
+          description: "Model {{ $labels.model_name }} has high inference latency ({{ $value }}s)"
+
+      - alert: HighErrorRate
+        expr: rate(ai_model_errors_total[5m]) / rate(ai_model_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High model error rate"
+          description: "Model {{ $labels.model_name }} has high error rate ({{ $value }})"
+
+      - alert: HighMemoryUsage
+        expr: ai_model_memory_usage_bytes > 0.9 * ai_model_memory_limit_bytes
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High model memory usage"
+          description: "Model {{ $labels.model_name }} is using {{ $value }}% of available memory"
+
+      - alert: ModelUnavailable
+        expr: up{job="api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Model service is down"
+          description: "The AI model service has been down for more than 1 minute"
+
+      - alert: HighGPUUtilization
+        expr: ai_model_gpu_utilization_percent > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High GPU utilization"
+          description: "GPU utilization for model {{ $labels.model_name }} is {{ $value }}%" 

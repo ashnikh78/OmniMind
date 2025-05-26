@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { Link as RouterLink } from 'react-router-dom';
 
 function ForgotPassword() {
   const navigate = useNavigate();
@@ -110,6 +111,15 @@ function ForgotPassword() {
               </Link>
             </Typography>
           </Box>
+        </Box>
+
+        <Box sx={{ mt: 1 }}>
+          <Typography variant="body2" color="text.secondary" align="center">
+            Don&apos;t have an account?{' '}
+            <Link component={RouterLink} to="/register" variant="body2">
+              Sign Up
+            </Link>
+          </Typography>
         </Box>
       </Paper>
     </Box>
