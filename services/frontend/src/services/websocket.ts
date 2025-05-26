@@ -4,16 +4,10 @@ import { toast } from 'react-toastify';
 import { store } from '@/store';
 import { setError } from '@/store/slices/uiSlice';
 
-interface WebSocketMessage<T = unknown> {
-  type: string;
-  payload: T;
-}
-
 type MessageHandler<T = unknown> = (data: T) => void;
 
 export class WebSocketService {
   private ws: WebSocket | null = null;
-  private config: WebSocketConfig;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 5;
   private reconnectDelay: number = 1000;

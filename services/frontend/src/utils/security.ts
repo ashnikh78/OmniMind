@@ -86,7 +86,7 @@ class SecurityManager {
       const tokenData = await this.getTokenData();
       if (!tokenData) return false;
 
-      const response = await fetch('/api/auth/refresh', {
+      const response = await fetch('/api/v1/auth/refresh', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -109,7 +109,7 @@ class SecurityManager {
   // CSRF Protection
   async getCsrfToken(): Promise<string> {
     try {
-      const response = await fetch('/api/csrf-token', {
+      const response = await fetch('/api/v1/csrf-token', {
         credentials: 'include'
       });
       const { token } = await response.json();
@@ -227,7 +227,7 @@ class SecurityManager {
       navigator.hardwareConcurrency,
       navigator.deviceMemory || 0,
       navigator.maxTouchPoints || 0
-    ];
+    ].filter((value): value is string | number => value !== undefined);
 
     const id = await this.hashComponents(components);
     return {

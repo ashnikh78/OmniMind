@@ -31,7 +31,7 @@ declare global {
   }
 }
 
-export interface DecodedToken {
+export interface DecodedToken extends Record<string, unknown> {
   exp: number;
   sub: string;
   roles: string[];

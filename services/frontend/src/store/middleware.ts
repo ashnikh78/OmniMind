@@ -25,16 +25,17 @@ export const errorHandlingMiddleware: Middleware = (store) => (next) => (action)
     let errorMessage = 'An unexpected error occurred';
 
     if (apiError instanceof Error) {
-      if (apiError.status === 401) {
+      const status = apiError.status ?? 0;
+      if (status === 401) {
         errorMessage = 'Authentication required. Please log in again.';
         // Optionally dispatch logout action here
-      } else if (apiError.status === 403) {
+      } else if (status === 403) {
         errorMessage = 'You do not have permission to perform this action.';
-      } else if (apiError.status === 404) {
+      } else if (status === 404) {
         errorMessage = 'The requested resource was not found.';
-      } else if (apiError.status === 429) {
+      } else if (status === 429) {
         errorMessage = 'Too many requests. Please try again later.';
-      } else if (apiError.status >= 500) {
+      } else if (status >= 500) {
         errorMessage = 'Server error. Please try again later.';
       } else {
         errorMessage = apiError.message || errorMessage;
