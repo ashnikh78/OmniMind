@@ -1,5 +1,5 @@
 declare module 'jwt-decode' {
-  export function jwtDecode<T = any>(token: string): T;
+  export function jwtDecode<T extends Record<string, unknown>>(token: string): T;
 }
 
 declare module 'react-toastify' {
@@ -11,8 +11,24 @@ declare module 'react-toastify' {
   };
 }
 
-interface Navigator {
-  deviceMemory?: number;
+// Extend the global Navigator interface
+declare global {
+  interface Navigator {
+    deviceMemory?: number;
+    hardwareConcurrency?: number;
+    maxTouchPoints?: number;
+  }
+
+  namespace NodeJS {
+    interface ProcessEnv {
+      NODE_ENV: 'development' | 'production' | 'test';
+      REACT_APP_ENCRYPTION_KEY?: string;
+      REACT_APP_API_URL?: string;
+      REACT_APP_WS_URL?: string;
+      REACT_APP_API_KEY?: string;
+      REACT_APP_ALLOWED_DOMAINS?: string;
+    }
+  }
 }
 
 export interface DecodedToken {
@@ -76,7 +92,7 @@ export type SecurityEventType =
 export interface SecurityEvent {
   type: SecurityEventType;
   timestamp: number;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 }
 
 export interface CSPPolicy {

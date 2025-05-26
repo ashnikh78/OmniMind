@@ -1,19 +1,18 @@
 import React from 'react';
-import PropTypes from 'prop-types';
 import { Box, Typography, Button, Stack, Fade } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Error as ErrorIcon, ArrowBack as ArrowBackIcon, Home as HomeIcon } from '@mui/icons-material';
 import { Helmet } from 'react-helmet-async';
 
-function NotFound() {
+const NotFound: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleGoBack = () => {
+  const handleGoBack = (): void => {
     navigate(-1);
   };
 
-  const handleGoHome = () => {
+  const handleGoHome = (): void => {
     navigate('/');
   };
 
@@ -137,10 +136,6 @@ function NotFound() {
       </Fade>
     </>
   );
-}
-
-NotFound.propTypes = {
-  // Add any props if needed in the future
 };
 
 export default NotFound; 

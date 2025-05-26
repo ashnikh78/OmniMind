@@ -1,6 +1,23 @@
 declare module 'marked' {
-  export function marked(text: string, options?: any): string;
-  export function setOptions(options: any): void;
+  interface MarkedOptions {
+    gfm?: boolean;
+    breaks?: boolean;
+    sanitize?: boolean;
+    smartLists?: boolean;
+    smartypants?: boolean;
+    xhtml?: boolean;
+    highlight?: (code: string, lang: string) => string;
+    langPrefix?: string;
+    headerPrefix?: string;
+    renderer?: unknown;
+    pedantic?: boolean;
+    mangle?: boolean;
+    sanitizer?: (text: string) => string;
+    silent?: boolean;
+  }
+
+  export function marked(text: string, options?: MarkedOptions): string;
+  export function setOptions(options: MarkedOptions): void;
 }
 
 declare module 'highlight.js' {
@@ -10,7 +27,7 @@ declare module 'highlight.js' {
 }
 
 declare module 'react-dropzone' {
-  import { ComponentProps } from 'react';
+  import { ComponentProps, HTMLAttributes, InputHTMLAttributes } from 'react';
 
   export interface FileRejection {
     file: File;
@@ -55,9 +72,19 @@ declare module 'react-dropzone' {
     fileRejections: FileRejection[];
   }
 
+  export interface DropzoneRootProps extends HTMLAttributes<HTMLDivElement> {
+    refKey?: string;
+    [key: string]: unknown;
+  }
+
+  export interface DropzoneInputProps extends InputHTMLAttributes<HTMLInputElement> {
+    refKey?: string;
+    [key: string]: unknown;
+  }
+
   export function useDropzone(options?: DropzoneOptions): {
-    getRootProps: (props?: any) => any;
-    getInputProps: (props?: any) => any;
+    getRootProps: (props?: DropzoneRootProps) => DropzoneRootProps;
+    getInputProps: (props?: DropzoneInputProps) => DropzoneInputProps;
     open: () => void;
     isFocused: boolean;
     isFileDialogActive: boolean;
@@ -68,30 +95,4 @@ declare module 'react-dropzone' {
     acceptedFiles: File[];
     fileRejections: FileRejection[];
   };
-}
-
-declare module 'react-toastify' {
-  import { ComponentType } from 'react';
-
-  export interface ToastOptions {
-    position?: 'top-right' | 'top-center' | 'top-left' | 'bottom-right' | 'bottom-center' | 'bottom-left';
-    autoClose?: number | false;
-    hideProgressBar?: boolean;
-    closeOnClick?: boolean;
-    pauseOnHover?: boolean;
-    draggable?: boolean;
-    progress?: number;
-    onOpen?: () => void;
-    onClose?: () => void;
-  }
-
-  export const toast: {
-    success: (message: string, options?: ToastOptions) => void;
-    error: (message: string, options?: ToastOptions) => void;
-    info: (message: string, options?: ToastOptions) => void;
-    warning: (message: string, options?: ToastOptions) => void;
-    dismiss: () => void;
-  };
-
-  export const ToastContainer: ComponentType<ToastOptions>;
 } 

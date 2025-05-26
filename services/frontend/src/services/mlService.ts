@@ -1,25 +1,48 @@
-import { apiClient } from './apiClient';
+import apiClient from './apiClient';
 import { WebSocketMessage } from '../types/api';
+
+type ModelType = 'llm' | 'classification' | 'regression' | 'clustering';
+type ModelStatus = 'ready' | 'training' | 'error';
+type ModelMetrics = {
+  accuracy?: number;
+  precision?: number;
+  recall?: number;
+  f1Score?: number;
+  latency?: number;
+};
 
 interface MLModel {
   id: string;
   name: string;
-  type: 'llm' | 'classification' | 'regression' | 'clustering';
-  status: 'ready' | 'training' | 'error';
-  metrics: {
-    accuracy?: number;
-    precision?: number;
-    recall?: number;
-    f1Score?: number;
-    latency?: number;
+  type: ModelType;
+  status: ModelStatus;
+  metrics: ModelMetrics;
+  parameters: {
+    temperature?: number;
+    maxTokens?: number;
+    topP?: number;
+    frequencyPenalty?: number;
+    presencePenalty?: number;
+    stopSequences?: string[];
+    epochs?: number;
+    batchSize?: number;
+    learningRate?: number;
+    validationSplit?: number;
+    [key: string]: unknown;
   };
-  parameters: Record<string, any>;
   lastUpdated: string;
 }
 
+type ModelInput = string | {
+  text?: string;
+  tokens?: string[];
+  embeddings?: number[];
+  features?: Record<string, number | string | boolean>;
+};
+
 interface InferenceRequest {
   modelId: string;
-  input: string | Record<string, any>;
+  input: ModelInput;
   parameters?: {
     temperature?: number;
     maxTokens?: number;
@@ -32,7 +55,7 @@ interface InferenceRequest {
 }
 
 interface InferenceResponse {
-  output: string | Record<string, any>;
+  output: ModelInput;
   metadata: {
     tokens: number;
     latency: number;
@@ -43,7 +66,12 @@ interface InferenceResponse {
 
 interface TrainingRequest {
   modelId: string;
-  data: Record<string, any>[];
+  data: Array<{
+    input: ModelInput;
+    output?: ModelInput;
+    label?: string | number;
+    weight?: number;
+  }>;
   parameters: {
     epochs: number;
     batchSize: number;
@@ -114,7 +142,8 @@ class MLService {
     this.inferenceQueue.set(requestId, request);
 
     try {
-      const response = await fetch(`${apiClient.baseURL}/api/v1/ml/inference/${request.modelId}/stream`, {
+      const baseURL = process.env.REACT_APP_API_URL || 'http://localhost';
+      const response = await fetch(`${baseURL}/api/v1/ml/inference/${request.modelId}/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -188,11 +217,20 @@ class MLService {
   // Model Evaluation
   async evaluateModel(
     modelId: string,
-    testData: Record<string, any>[]
+    testData: Array<{
+      input: ModelInput;
+      output?: ModelInput;
+      label?: string | number;
+    }>
   ): Promise<{
     metrics: Record<string, number>;
     confusionMatrix?: number[][];
-    classificationReport?: Record<string, any>;
+    classificationReport?: Record<string, {
+      precision: number;
+      recall: number;
+      f1Score: number;
+      support: number;
+    }>;
   }> {
     return apiClient.post(`/api/v1/ml/evaluate/${modelId}`, { testData });
   }
@@ -227,10 +265,12 @@ class MLService {
     version: string,
     data: Partial<MLModel>
   ): Promise<MLModel> {
-    return apiClient.post(`/api/v1/ml/models/${modelId}/versions`, {
-      version,
-      ...data,
-    });
+    const response = await apiClient.post<MLModel>(
+      `/api/v1/ml/models/${modelId}/versions`,
+      { version, ...data }
+    );
+    this.models.set(response.id, response);
+    return response;
   }
 
   async getModelVersions(modelId: string): Promise<MLModel[]> {
@@ -238,9 +278,17 @@ class MLService {
   }
 
   async rollbackModel(modelId: string, version: string): Promise<MLModel> {
-    return apiClient.post(`/api/v1/ml/models/${modelId}/rollback`, { version });
+    const response = await apiClient.post<MLModel>(
+      `/api/v1/ml/models/${modelId}/rollback`,
+      { version }
+    );
+    this.models.set(response.id, response);
+    return response;
   }
 }
 
+// Create and export an instance of MLService
 export const mlService = new MLService();
-export default mlService; 
+
+export { MLService };
+export type { MLModel, InferenceRequest, InferenceResponse, TrainingRequest, ModelInput }; 

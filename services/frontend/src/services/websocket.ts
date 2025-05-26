@@ -1,133 +1,88 @@
 import { WebSocketConfig, WebSocketMessage } from '../types/api';
 import { security } from '../utils/security';
 import { toast } from 'react-toastify';
+import { store } from '@/store';
+import { setError } from '@/store/slices/uiSlice';
 
-class WebSocketService {
+interface WebSocketMessage<T = unknown> {
+  type: string;
+  payload: T;
+}
+
+type MessageHandler<T = unknown> = (data: T) => void;
+
+export class WebSocketService {
   private ws: WebSocket | null = null;
   private config: WebSocketConfig;
   private reconnectAttempts: number = 0;
-  private messageHandlers: Map<string, ((data: any) => void)[]> = new Map();
+  private maxReconnectAttempts: number = 5;
+  private reconnectDelay: number = 1000;
+  private messageHandlers: Map<string, MessageHandler[]> = new Map();
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private reconnectTimeout: NodeJS.Timeout | null = null;
+  private readonly url: string;
+  private readonly onMessage: (message: WebSocketMessage) => void;
 
-  constructor(config: WebSocketConfig) {
-    this.config = config;
+  constructor(url: string, onMessage: (message: WebSocketMessage) => void) {
+    this.url = url;
+    this.onMessage = onMessage;
   }
 
   public connect(): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      return;
-    }
-
     try {
-      const token = security.getToken();
-      if (!token) {
-        throw new Error('No authentication token available');
-      }
-
-      this.ws = new WebSocket(`${this.config.url}?token=${token}`);
-
-      this.ws.onopen = this.handleOpen.bind(this);
-      this.ws.onmessage = this.handleMessage.bind(this);
-      this.ws.onerror = this.handleError.bind(this);
-      this.ws.onclose = this.handleClose.bind(this);
-
+      this.ws = new WebSocket(this.url);
+      this.setupEventHandlers();
       this.startHeartbeat();
     } catch (error) {
-      console.error('WebSocket connection error:', error);
       this.handleError(error);
     }
   }
 
-  public disconnect(): void {
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
+  private setupEventHandlers(): void {
+    if (!this.ws) return;
 
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-    }
-
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
-    }
-
-    this.reconnectAttempts = 0;
-  }
-
-  public onMessage<T>(type: string, handler: (data: T) => void): void {
-    if (!this.messageHandlers.has(type)) {
-      this.messageHandlers.set(type, []);
-    }
-    this.messageHandlers.get(type)?.push(handler);
-  }
-
-  public offMessage(type: string, handler: (data: any) => void): void {
-    const handlers = this.messageHandlers.get(type);
-    if (handlers) {
-      const index = handlers.indexOf(handler);
-      if (index !== -1) {
-        handlers.splice(index, 1);
-      }
-    }
-  }
-
-  public send<T>(type: string, payload: T): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      throw new Error('WebSocket is not connected');
-    }
-
-    const message: WebSocketMessage<T> = {
-      type,
-      payload,
-      timestamp: new Date().toISOString(),
+    this.ws.onopen = () => {
+      console.log('WebSocket connected');
+      this.reconnectAttempts = 0;
     };
 
-    this.ws.send(JSON.stringify(message));
+    this.ws.onclose = () => {
+      console.log('WebSocket disconnected');
+      this.cleanup();
+      this.attemptReconnect();
+    };
+
+    this.ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      this.handleError(error);
+    };
+
+    this.ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data) as WebSocketMessage;
+        this.onMessage(message);
+        this.notifyHandlers(message);
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    };
   }
 
-  private handleOpen(): void {
-    console.log('WebSocket connected');
-    this.reconnectAttempts = 0;
-    this.startHeartbeat();
-  }
-
-  private handleMessage(event: MessageEvent): void {
-    try {
-      const message: WebSocketMessage = JSON.parse(event.data);
-
-      if (message.type === 'heartbeat') {
-        return;
-      }
-
-      const handlers = this.messageHandlers.get(message.type);
-      if (handlers) {
-        handlers.forEach(handler => handler(message.payload));
-      }
-    } catch (error) {
-      console.error('Error handling WebSocket message:', error);
+  private startHeartbeat(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
     }
+
+    this.heartbeatInterval = setInterval(() => {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: 'ping', payload: { timestamp: Date.now() } }));
+      }
+    }, 30000); // Send heartbeat every 30 seconds
   }
 
-  private handleError(error: any): void {
-    console.error('WebSocket error:', error);
-    toast.error('WebSocket connection error');
-    this.reconnect();
-  }
-
-  private handleClose(event: CloseEvent): void {
-    console.log('WebSocket closed:', event.code, event.reason);
-    this.stopHeartbeat();
-    this.reconnect();
-  }
-
-  private reconnect(): void {
-    if (this.reconnectAttempts >= this.config.reconnectAttempts) {
-      console.error('Max reconnection attempts reached');
-      toast.error('Failed to connect to server');
+  private attemptReconnect(): void {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      store.dispatch(setError('Failed to connect to WebSocket server'));
       return;
     }
 
@@ -138,35 +93,68 @@ class WebSocketService {
     this.reconnectTimeout = setTimeout(() => {
       this.reconnectAttempts++;
       this.connect();
-    }, this.config.reconnectInterval);
+    }, this.reconnectDelay * this.reconnectAttempts);
   }
 
-  private startHeartbeat(): void {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-    }
-
-    this.heartbeatInterval = setInterval(() => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        this.send('heartbeat', { timestamp: Date.now() });
-      }
-    }, this.config.heartbeatInterval);
+  private handleError(error: unknown): void {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown WebSocket error';
+    store.dispatch(setError(errorMessage));
+    this.cleanup();
   }
 
-  private stopHeartbeat(): void {
+  private cleanup(): void {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
+
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+  }
+
+  public disconnect(): void {
+    this.cleanup();
+  }
+
+  public on<T>(type: string, handler: MessageHandler<T>): void {
+    const handlers = this.messageHandlers.get(type) || [];
+    handlers.push(handler as MessageHandler);
+    this.messageHandlers.set(type, handlers);
+  }
+
+  public off<T>(type: string, handler: MessageHandler<T>): void {
+    const handlers = this.messageHandlers.get(type) || [];
+    const index = handlers.indexOf(handler as MessageHandler);
+    if (index !== -1) {
+      handlers.splice(index, 1);
+      this.messageHandlers.set(type, handlers);
+    }
+  }
+
+  public send<T>(message: WebSocketMessage<T>): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(message));
+    } else {
+      store.dispatch(setError('WebSocket is not connected'));
+    }
+  }
+
+  private notifyHandlers(message: WebSocketMessage): void {
+    const handlers = this.messageHandlers.get(message.type) || [];
+    handlers.forEach(handler => handler(message.payload));
   }
 }
 
 // Create WebSocket service instance
-const wsService = new WebSocketService({
-  url: process.env.REACT_APP_WS_URL || 'ws://localhost',
-  reconnectAttempts: 5,
-  reconnectInterval: 3000,
-  heartbeatInterval: 30000,
+const wsService = new WebSocketService(process.env.REACT_APP_WS_URL || 'ws://localhost', (data) => {
+  // Handle incoming WebSocket message
 });
 
 export default wsService; 

@@ -13,6 +13,14 @@ export interface OllamaModel {
     contextWindow: number;
   };
   capabilities: string[];
+  size: number;
+  digest: string;
+  details: {
+    format: string;
+    family: string;
+    parameter_size: string;
+    quantization_level: string;
+  };
 }
 
 export interface ChatMessage {
@@ -40,6 +48,8 @@ export interface OllamaResponse {
   eval_duration: number;
   eval_count: number;
   context: number[];
+  response: string;
+  prompt_eval_count?: number;
 }
 
 export interface OllamaSettings {
@@ -69,6 +79,11 @@ export interface OllamaSettings {
   rmsNormEps?: number;
   ropeScalingType?: string;
   ropeScalingFactor?: number;
+}
+
+interface OllamaCapabilities {
+  model: string;
+  capabilities: string[];
 }
 
 class OllamaService {
@@ -101,6 +116,9 @@ class OllamaService {
             contextWindow: 4096,
           },
           capabilities: this.determineModelCapabilities(model),
+          size: model.size,
+          digest: model.digest,
+          details: model.details,
         });
       }
     } catch (error) {
@@ -124,6 +142,14 @@ class OllamaService {
           contextWindow: 4096,
         },
         capabilities: ['chat', 'completion', 'embedding'],
+        size: 0,
+        digest: '',
+        details: {
+          format: 'unknown',
+          family: 'llama',
+          parameter_size: 'unknown',
+          quantization_level: 'unknown'
+        }
       },
       {
         id: 'mistral',
@@ -137,24 +163,28 @@ class OllamaService {
           contextWindow: 8192,
         },
         capabilities: ['chat', 'completion', 'embedding', 'code'],
+        size: 0,
+        digest: '',
+        details: {
+          format: 'unknown',
+          family: 'mistral',
+          parameter_size: 'unknown',
+          quantization_level: 'unknown'
+        }
       },
     ];
 
     defaultModels.forEach(model => this.models.set(model.id, model));
   }
 
-  private determineModelCapabilities(model: any): string[] {
-    const capabilities = ['chat', 'completion'];
+  private determineModelCapabilities(model: OllamaModel): string[] {
+    const capabilities: string[] = [];
     
-    // Add capabilities based on model name or properties
-    if (model.name.toLowerCase().includes('code')) {
-      capabilities.push('code');
-    }
-    if (model.name.toLowerCase().includes('embed')) {
-      capabilities.push('embedding');
-    }
-    if (model.name.toLowerCase().includes('instruct')) {
-      capabilities.push('instruction');
+    // Add capabilities based on model details
+    if (model.details.family === 'llama') {
+      capabilities.push('text-generation', 'chat', 'code-completion');
+    } else if (model.details.family === 'mistral') {
+      capabilities.push('text-generation', 'chat', 'code-completion', 'instruction-following');
     }
     
     return capabilities;
@@ -192,14 +222,16 @@ class OllamaService {
     }
   }
 
-  private async *handleStreamResponse(stream: any): AsyncGenerator<OllamaResponse> {
-    for await (const chunk of stream) {
-      try {
-        const response = JSON.parse(chunk.toString());
-        yield response;
-      } catch (error) {
-        console.error('Error parsing stream chunk:', error);
+  private async *handleStreamResponse(stream: ReadableStream<OllamaResponse>): AsyncGenerator<OllamaResponse> {
+    const reader = stream.getReader();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        yield value;
       }
+    } finally {
+      reader.releaseLock();
     }
   }
 
@@ -376,7 +408,7 @@ class OllamaService {
     }
   }
 
-  async extractPreferences(text: string, model: string = this.defaultModel): Promise<Array<{ key: string; value: any }>> {
+  async extractPreferences(text: string, model: string = this.defaultModel): Promise<Array<{ key: string; value: string | number | boolean }>> {
     try {
       const response = await this.chat(
         [
@@ -573,6 +605,34 @@ class OllamaService {
       throw new Error('Failed to apply consistent styling');
     }
   }
+
+  async listModels(): Promise<OllamaModel[]> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/tags`);
+      if (!response.ok) {
+        throw new Error(`Failed to list models: ${response.statusText}`);
+      }
+      const data = await response.json();
+      return data.models.map((model: any) => ({
+        name: model.name,
+        size: model.size || 0,
+        digest: model.digest || '',
+        details: {
+          format: model.format || 'unknown',
+          family: model.family || 'unknown',
+          parameter_size: model.parameter_size || 'unknown',
+          quantization_level: model.quantization_level || 'unknown'
+        }
+      }));
+    } catch (error) {
+      console.error('Error listing models:', error);
+      throw error;
+    }
+  }
 }
 
-export const ollamaService = new OllamaService(); 
+// Create and export an instance of OllamaService
+export const ollamaService = new OllamaService(
+  process.env.REACT_APP_OLLAMA_URL || 'http://localhost:11434',
+  process.env.REACT_APP_DEFAULT_MODEL || 'llama2'
+); 

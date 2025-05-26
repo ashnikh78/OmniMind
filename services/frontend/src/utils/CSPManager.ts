@@ -16,6 +16,11 @@ class CSPManager implements ICSPManager {
     return CSPManager.instance;
   }
 
+  // Instance method to satisfy the interface
+  getInstance(): CSPManager {
+    return CSPManager.getInstance();
+  }
+
   private initializeDefaultPolicies(): void {
     this.policies.set('default-src', ["'self'"]);
     this.policies.set('script-src', ["'self'", "'unsafe-inline'", "'unsafe-eval'"]);

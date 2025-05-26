@@ -1,3 +1,5 @@
+import type { SecureHeaders } from '@/types/security';
+
 // API Response Types
 export interface ApiResponse<T> {
   data: T;
@@ -41,7 +43,7 @@ export interface User {
 export interface ApiError {
   code: string;
   message: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   status: number;
 }
 
@@ -65,12 +67,12 @@ export interface FilterParams {
 export interface ApiConfig {
   baseURL: string;
   timeout: number;
-  headers: Record<string, string>;
+  headers: SecureHeaders;
   withCredentials: boolean;
 }
 
 // WebSocket Types
-export interface WebSocketMessage<T = any> {
+export interface WebSocketMessage<T = unknown> {
   type: string;
   payload: T;
   timestamp: string;

@@ -5,6 +5,8 @@ interface User {
   email: string;
   name: string;
   role: string;
+  permissions: string[];
+  tenant_id?: string;
 }
 
 interface AuthState {
@@ -18,7 +20,7 @@ interface AuthState {
 const initialState: AuthState = {
   user: null,
   token: localStorage.getItem('token'),
-  isAuthenticated: false,
+  isAuthenticated: !!localStorage.getItem('token'),
   loading: false,
   error: null,
 };
@@ -27,19 +29,19 @@ const authSlice = createSlice({
   name: 'auth',
   initialState,
   reducers: {
-    loginStart: (state) => {
-      state.loading = true;
-      state.error = null;
-    },
-    loginSuccess: (state, action: PayloadAction<{ user: User; token: string }>) => {
-      state.loading = false;
+    setUser: (state, action: PayloadAction<User>) => {
+      state.user = action.payload;
       state.isAuthenticated = true;
-      state.user = action.payload.user;
-      state.token = action.payload.token;
-      localStorage.setItem('token', action.payload.token);
     },
-    loginFailure: (state, action: PayloadAction<string>) => {
-      state.loading = false;
+    setToken: (state, action: PayloadAction<string>) => {
+      state.token = action.payload;
+      localStorage.setItem('token', action.payload);
+      state.isAuthenticated = true;
+    },
+    setLoading: (state, action: PayloadAction<boolean>) => {
+      state.loading = action.payload;
+    },
+    setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
     },
     logout: (state) => {
@@ -48,11 +50,15 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       localStorage.removeItem('token');
     },
-    updateUser: (state, action: PayloadAction<User>) => {
-      state.user = action.payload;
-    },
   },
 });
 
-export const { loginStart, loginSuccess, loginFailure, logout, updateUser } = authSlice.actions;
+export const {
+  setUser,
+  setToken,
+  setLoading,
+  setError,
+  logout,
+} = authSlice.actions;
+
 export default authSlice.reducer; 

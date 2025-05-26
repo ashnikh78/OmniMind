@@ -1,104 +1,48 @@
-import { Middleware } from 'redux';
+import { Middleware } from '@reduxjs/toolkit';
 import { RootState } from './index';
-import { security } from '../utils/security';
+import { setError } from './slices/uiSlice';
+
+interface ApiError extends Error {
+  status?: number;
+  code?: string;
+  details?: unknown;
+}
 
 // Logging middleware
-export const loggingMiddleware: Middleware<{}, RootState> = (store) => (next) => (action) => {
-  const timestamp = new Date().toISOString();
-  console.group(`Action: ${action.type} [${timestamp}]`);
-  console.log('Previous State:', store.getState());
-  console.log('Action:', action);
-  
+export const loggingMiddleware: Middleware = (store) => (next) => (action) => {
+  console.log('Dispatching:', action);
   const result = next(action);
-  
   console.log('Next State:', store.getState());
-  console.groupEnd();
-  
-  return result;
-};
-
-// Analytics middleware
-export const analyticsMiddleware: Middleware<{}, RootState> = (store) => (next) => (action) => {
-  const result = next(action);
-  
-  // Track specific actions
-  if (action.type.startsWith('auth/')) {
-    // Track authentication events
-    security.trackEvent('auth', {
-      action: action.type,
-      userId: store.getState().auth.user?.id,
-      timestamp: new Date().toISOString(),
-    });
-  }
-  
   return result;
 };
 
 // Error handling middleware
-export const errorHandlingMiddleware: Middleware<{}, RootState> = (store) => (next) => (action) => {
+export const errorHandlingMiddleware: Middleware = (store) => (next) => (action) => {
   try {
     return next(action);
   } catch (error) {
-    console.error('Redux Error:', error);
-    
-    // Log error to error tracking service
-    security.logError('redux_error', {
-      action: action.type,
-      error: error.message,
-      stack: error.stack,
-      state: store.getState(),
-    });
-    
-    // Dispatch error action
-    store.dispatch({
-      type: 'error/occurred',
-      payload: {
-        action: action.type,
-        error: error.message,
-      },
-    });
-    
+    const apiError = error as ApiError;
+    let errorMessage = 'An unexpected error occurred';
+
+    if (apiError instanceof Error) {
+      if (apiError.status === 401) {
+        errorMessage = 'Authentication required. Please log in again.';
+        // Optionally dispatch logout action here
+      } else if (apiError.status === 403) {
+        errorMessage = 'You do not have permission to perform this action.';
+      } else if (apiError.status === 404) {
+        errorMessage = 'The requested resource was not found.';
+      } else if (apiError.status === 429) {
+        errorMessage = 'Too many requests. Please try again later.';
+      } else if (apiError.status >= 500) {
+        errorMessage = 'Server error. Please try again later.';
+      } else {
+        errorMessage = apiError.message || errorMessage;
+      }
+    }
+
+    console.error('Error in middleware:', error);
+    store.dispatch(setError(errorMessage));
     throw error;
   }
-};
-
-// State persistence middleware
-export const persistenceMiddleware: Middleware<{}, RootState> = (store) => (next) => (action) => {
-  const result = next(action);
-  
-  // Persist specific parts of state
-  if (action.type.startsWith('auth/') || action.type.startsWith('ui/')) {
-    const state = store.getState();
-    localStorage.setItem('redux_state', JSON.stringify({
-      auth: state.auth,
-      ui: state.ui,
-    }));
-  }
-  
-  return result;
-};
-
-// Rate limiting middleware
-export const rateLimitingMiddleware: Middleware<{}, RootState> = (store) => (next) => (action) => {
-  const actionType = action.type;
-  
-  // Check rate limit for specific actions
-  if (actionType.startsWith('api/')) {
-    const key = `rate_limit_${actionType}`;
-    if (!security.rateLimiter.check(key)) {
-      console.warn(`Rate limit exceeded for action: ${actionType}`);
-      return;
-    }
-  }
-  
-  return next(action);
-};
-
-// Combine all middleware
-export const middleware = [
-  loggingMiddleware,
-  analyticsMiddleware,
-  errorHandlingMiddleware,
-  persistenceMiddleware,
-  rateLimitingMiddleware,
-]; 
+}; 

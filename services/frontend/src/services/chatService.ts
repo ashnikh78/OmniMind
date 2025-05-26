@@ -1,6 +1,6 @@
 import { WebSocketMessage } from '../types/api';
 import { mlService } from './mlService';
-import { wsService } from './websocket';
+import wsService from './websocket';
 
 interface ChatMessage {
   id: string;
@@ -28,20 +28,42 @@ interface ChatMessage {
   };
 }
 
+interface ChatParameters {
+  temperature?: number;
+  topP?: number;
+  topK?: number;
+  repetitionPenalty?: number;
+  contextWindow?: number;
+  maxTokens?: number;
+  stopSequences?: string[];
+}
+
+interface ChatMemory {
+  shortTerm?: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: string;
+  }>;
+  longTerm?: Record<string, {
+    key: string;
+    value: string;
+    timestamp: string;
+    importance: number;
+  }>;
+  lastIntent?: { type: string; confidence: number };
+  sentimentHistory?: Array<{ score: number; label: string }>;
+  [key: string]: any;
+}
+
 interface ChatSession {
   id: string;
+  modelId: string;
+  parameters: ChatParameters;
+  memory: ChatMemory;
+  createdAt: string;
+  updatedAt: string;
+  metadata: Record<string, string | number | boolean>;
   messages: ChatMessage[];
-  context: {
-    model: string;
-    parameters: Record<string, any>;
-    memory: Record<string, any>;
-  };
-  metadata: {
-    created: string;
-    lastUpdated: string;
-    totalTokens: number;
-    averageLatency: number;
-  };
 }
 
 class ChatService {
@@ -54,25 +76,20 @@ class ChatService {
   }
 
   private setupWebSocket(): void {
-    wsService.onMessage('chat_message', this.handleIncomingMessage.bind(this));
+    wsService.on('chat_message', this.handleIncomingMessage.bind(this));
   }
 
   // Session Management
-  async createSession(modelId: string, parameters?: Record<string, any>): Promise<ChatSession> {
+  async createSession(modelId: string, parameters?: ChatParameters): Promise<ChatSession> {
     const session: ChatSession = {
       id: Math.random().toString(36).substring(2),
+      modelId,
+      parameters: parameters || {},
+      memory: {},
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      metadata: {},
       messages: [],
-      context: {
-        model: modelId,
-        parameters: parameters || {},
-        memory: {},
-      },
-      metadata: {
-        created: new Date().toISOString(),
-        lastUpdated: new Date().toISOString(),
-        totalTokens: 0,
-        averageLatency: 0,
-      },
     };
 
     this.sessions.set(session.id, session);
@@ -122,10 +139,9 @@ class ChatService {
 
     // Update session metadata
     session.metadata.lastUpdated = new Date().toISOString();
-    session.metadata.totalTokens += (response.metadata?.tokens || 0);
-    session.metadata.averageLatency = 
-      (session.metadata.averageLatency * (session.messages.length - 1) + 
-       (response.metadata?.latency || 0)) / session.messages.length;
+    session.metadata.totalTokens = Number(session.metadata.totalTokens || 0) + (response.metadata?.tokens || 0);
+    session.metadata.averageLatency =
+      ((Number(session.metadata.averageLatency || 0) * (session.messages.length - 1)) + (response.metadata?.latency || 0)) / session.messages.length;
 
     return response;
   }
@@ -139,11 +155,9 @@ class ChatService {
 
     // Run inference with ML model
     const response = await mlService.runInference({
-      modelId: session.context.model,
+      modelId: session.modelId,
       input: {
-        message: message.content,
-        context,
-        parameters: session.context.parameters,
+        text: message.content,
       },
     });
 
@@ -154,10 +168,10 @@ class ChatService {
       content: response.output as string,
       timestamp: new Date().toISOString(),
       metadata: {
-        model: session.context.model,
+        model: session.modelId,
         tokens: response.metadata.tokens,
         latency: response.metadata.latency,
-        confidence: this.calculateConfidence(response),
+        confidence: 0.5,
         entities: this.extractEntities(response.output as string),
         sentiment: this.analyzeSentiment(response.output as string),
         intent: this.detectIntent(response.output as string),
@@ -177,12 +191,17 @@ class ChatService {
       .map(msg => `${msg.role}: ${msg.content}`)
       .join('\n');
     
-    return `${context}\nMemory: ${JSON.stringify(session.context.memory)}`;
+    return `${context}\nMemory: ${JSON.stringify(session.memory)}`;
   }
 
-  private calculateConfidence(response: any): number {
-    // Implement confidence calculation based on model output
-    return 0.95; // Placeholder
+  private calculateConfidence(response: { score?: number; probability?: number }): number {
+    if (response.score !== undefined) {
+      return response.score;
+    }
+    if (response.probability !== undefined) {
+      return response.probability;
+    }
+    return 0.5; // Default confidence
   }
 
   private extractEntities(text: string): Array<{ type: string; value: string; confidence: number }> {
@@ -206,7 +225,7 @@ class ChatService {
     assistantMessage: ChatMessage
   ): void {
     // Update session memory based on conversation
-    const memory = session.context.memory;
+    const memory = session.memory;
     
     // Store entities
     assistantMessage.metadata?.entities?.forEach(entity => {
@@ -263,8 +282,8 @@ class ChatService {
 
     return {
       messageCount: session.messages.length,
-      averageResponseTime: session.metadata.averageLatency,
-      tokenUsage: session.metadata.totalTokens,
+      averageResponseTime: Number(session.metadata.averageLatency || 0),
+      tokenUsage: Number(session.metadata.totalTokens || 0),
       sentimentTrend: session.messages
         .filter(m => m.metadata?.sentiment)
         .map(m => m.metadata!.sentiment!.score),

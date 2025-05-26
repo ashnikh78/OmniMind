@@ -1,175 +1,134 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, CancelTokenSource } from 'axios';
+import axios, { AxiosRequestConfig, AxiosError } from 'axios';
+import { ApiConfig, ApiError, ApiResponse } from '@/types/api';
+import { security } from '@/utils/security';
+import type { SecureHeaders } from '@/types/security';
 import { toast } from 'react-toastify';
-import { ApiConfig, ApiError, ApiResponse } from '../types/api';
-import { security } from '../utils/security';
+
+interface ErrorResponse {
+  code?: string;
+  message?: string;
+  details?: Record<string, unknown>;
+}
 
 class ApiClient {
-  private instance: AxiosInstance;
-  private cancelTokens: Map<string, CancelTokenSource>;
+  private baseURL: string;
+  private config: ApiConfig;
 
-  constructor(config: ApiConfig) {
-    this.instance = axios.create({
-      baseURL: config.baseURL,
-      timeout: config.timeout,
-      headers: {
-        'Content-Type': 'application/json',
-        ...config.headers,
-      },
-      withCredentials: config.withCredentials,
-    });
-
-    this.cancelTokens = new Map();
-    this.setupInterceptors();
-  }
-
-  private setupInterceptors(): void {
-    // Request interceptor
-    this.instance.interceptors.request.use(
-      (config) => {
-        // Add CSRF token if available
-        const csrfToken = security.getCsrfToken();
-        if (csrfToken) {
-          config.headers['X-CSRF-Token'] = csrfToken;
-        }
-
-        // Add auth token if available
-        const token = security.getToken();
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-
-        // Add request ID for tracking
-        config.headers['X-Request-ID'] = this.generateRequestId();
-
-        return config;
-      },
-      (error) => {
-        return Promise.reject(this.handleError(error));
-      }
-    );
-
-    // Response interceptor
-    this.instance.interceptors.response.use(
-      (response) => {
-        // Handle successful response
-        return this.handleResponse(response);
-      },
-      (error) => {
-        return Promise.reject(this.handleError(error));
-      }
-    );
-  }
-
-  private generateRequestId(): string {
-    return Math.random().toString(36).substring(2) + Date.now().toString(36);
-  }
-
-  private handleResponse<T>(response: AxiosResponse<ApiResponse<T>>): T {
-    // Handle token refresh
-    if (response.headers['x-refresh-token']) {
-      security.setToken(response.headers['x-refresh-token']);
-    }
-
-    return response.data.data;
-  }
-
-  private handleError(error: any): ApiError {
-    if (axios.isCancel(error)) {
-      return {
-        code: 'REQUEST_CANCELLED',
-        message: 'Request was cancelled',
-        status: 499,
-      };
-    }
-
-    if (!error.response) {
-      return {
-        code: 'NETWORK_ERROR',
-        message: 'Network error occurred',
-        status: 0,
-      };
-    }
-
-    const apiError: ApiError = {
-      code: error.response.data?.code || 'UNKNOWN_ERROR',
-      message: error.response.data?.message || 'An unexpected error occurred',
-      details: error.response.data?.details,
-      status: error.response.status,
+  constructor(baseURL: string, config: Partial<ApiConfig>) {
+    this.baseURL = baseURL;
+    this.config = {
+      baseURL,
+      timeout: config.timeout || 30000,
+      headers: security.getSecureHeaders(),
+      withCredentials: true,
     };
-
-    // Handle specific error cases
-    switch (error.response.status) {
-      case 401:
-        security.removeToken();
-        window.location.href = '/login';
-        break;
-      case 403:
-        toast.error('You do not have permission to perform this action');
-        break;
-      case 429:
-        toast.error('Too many requests. Please try again later');
-        break;
-      default:
-        toast.error(apiError.message);
-    }
-
-    return apiError;
-  }
-
-  public async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return this.request<T>({ method: 'GET', url, ...config });
-  }
-
-  public async post<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    return this.request<T>({ method: 'POST', url, data, ...config });
-  }
-
-  public async put<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    return this.request<T>({ method: 'PUT', url, data, ...config });
-  }
-
-  public async delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return this.request<T>({ method: 'DELETE', url, ...config });
   }
 
   private async request<T>(config: AxiosRequestConfig): Promise<T> {
-    const requestId = this.generateRequestId();
-    const source = axios.CancelToken.source();
-    this.cancelTokens.set(requestId, source);
-
     try {
-      const response = await this.instance.request<ApiResponse<T>>({
+      const token = await security.getToken();
+      const headers = {
+        ...this.config.headers,
+        ...config.headers,
+      } as SecureHeaders;
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const response = await axios({
         ...config,
-        cancelToken: source.token,
+        baseURL: this.baseURL,
+        headers,
+        timeout: this.config.timeout,
+        withCredentials: this.config.withCredentials,
       });
-      return this.handleResponse<T>(response);
-    } finally {
-      this.cancelTokens.delete(requestId);
+
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
     }
   }
 
-  public cancelRequest(requestId: string): void {
-    const source = this.cancelTokens.get(requestId);
-    if (source) {
-      source.cancel('Request cancelled by user');
-      this.cancelTokens.delete(requestId);
+  private handleError(error: unknown): ApiError {
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError<ErrorResponse>;
+      const status = axiosError.response?.status || 500;
+      const errorData = axiosError.response?.data || {};
+      const message = errorData.message || axiosError.message || 'An unexpected error occurred';
+
+      if (status === 401) {
+        toast.error('Authentication required. Please log in again.');
+        // Optionally dispatch logout action here
+      } else if (status === 403) {
+        toast.error('You do not have permission to perform this action.');
+      } else if (status === 404) {
+        toast.error('The requested resource was not found.');
+      } else if (status === 429) {
+        toast.error('Too many requests. Please try again later.');
+      } else if (status >= 500) {
+        toast.error('Server error. Please try again later.');
+      } else {
+        toast.error(message);
+      }
+
+      return {
+        code: errorData.code || 'UNKNOWN_ERROR',
+        message,
+        status,
+        details: errorData.details,
+      };
     }
+
+    const genericError = error as Error;
+    toast.error(genericError.message || 'An unexpected error occurred');
+    return {
+      code: 'UNKNOWN_ERROR',
+      message: genericError.message || 'An unexpected error occurred',
+      status: 500,
+    };
   }
 
-  public cancelAllRequests(): void {
-    this.cancelTokens.forEach((source) => {
-      source.cancel('All requests cancelled');
+  public async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    return this.request<T>({
+      ...config,
+      method: 'GET',
+      url,
     });
-    this.cancelTokens.clear();
+  }
+
+  public async post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    return this.request<T>({
+      ...config,
+      method: 'POST',
+      url,
+      data,
+    });
+  }
+
+  public async put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    return this.request<T>({
+      ...config,
+      method: 'PUT',
+      url,
+      data,
+    });
+  }
+
+  public async delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    return this.request<T>({
+      ...config,
+      method: 'DELETE',
+      url,
+    });
   }
 }
 
-// Create API client instance
-const apiClient = new ApiClient({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost',
-  timeout: 10000,
-  headers: security.getSecureHeaders(),
-  withCredentials: true,
-});
+const apiClient = new ApiClient(
+  process.env.REACT_APP_API_URL || 'http://localhost',
+  {
+    timeout: 30000,
+  }
+);
 
 export default apiClient; 

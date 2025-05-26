@@ -14,40 +14,13 @@ import type {
   SecurityEventType
 } from '../types/security';
 
-// Type declarations for external modules
-declare module 'jwt-decode' {
-  export function jwtDecode<T = any>(token: string): T;
-}
-
-declare module 'react-toastify' {
-  export const toast: {
-    error: (message: string) => void;
-    success: (message: string) => void;
-    warning: (message: string) => void;
-    info: (message: string) => void;
-  };
-}
-
-interface DecodedToken {
-  exp: number;
-  sub: string;
-  roles: string[];
-}
-
-interface TokenData {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: number;
-}
-
-interface SecureHeaders {
-  'Content-Security-Policy': string;
-  'X-Content-Type-Options': string;
-  'X-Frame-Options': string;
-  'X-XSS-Protection': string;
-  'Strict-Transport-Security': string;
-  'Referrer-Policy': string;
-  'Permissions-Policy': string;
+// Type declaration for environment variables
+declare global {
+  namespace NodeJS {
+    interface ProcessEnv {
+      REACT_APP_ENCRYPTION_KEY?: string;
+    }
+  }
 }
 
 class SecurityManager {
@@ -265,20 +238,13 @@ class SecurityManager {
   }
 
   // Security Event Logging
-  private logSecurityEvent(type: SecurityEventType, details?: Record<string, any>): void {
-    const events = this.getSecurityEvents();
+  private logSecurityEvent(type: SecurityEventType, details?: Record<string, unknown>): void {
     const event: SecurityEvent = {
       type,
       timestamp: Date.now(),
       details
     };
-
-    events.unshift(event);
-    if (events.length > this.MAX_EVENTS) {
-      events.pop();
-    }
-
-    localStorage.setItem(this.SECURITY_EVENTS_KEY, JSON.stringify(events));
+    console.log('Security Event:', event);
   }
 
   private getSecurityEvents(): SecurityEvent[] {

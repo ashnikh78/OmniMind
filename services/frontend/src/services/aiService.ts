@@ -130,9 +130,9 @@ export interface MemorySystem {
     importance: Map<string, number>;
   };
   longTerm: {
-    facts: Map<string, any>;
+    facts: Map<string, { id: string; content: string; importance: number }>;
     relationships: Map<string, string[]>;
-    userPreferences: Map<string, any>;
+    userPreferences: Map<string, string | number | boolean>;
     conversationPatterns: Map<string, number>;
   };
   workingMemory: {
@@ -144,7 +144,7 @@ export interface MemorySystem {
 
 export interface EnhancedMemorySystem extends MemorySystem {
   adaptiveLearning: {
-    userPreferences: Map<string, any>;
+    userPreferences: Map<string, string | number | boolean>;
     interactionPatterns: Map<string, number>;
     learningProgress: Map<string, number>;
     skillLevels: Map<string, number>;
@@ -207,6 +207,28 @@ export interface AdvancedAnalytics extends ChatAnalytics {
   };
 }
 
+interface UserPreference {
+  value: string | number | boolean;
+  confidence: number;
+  lastUpdated: string;
+  source: 'explicit' | 'inferred' | 'default';
+}
+
+interface PreferenceChange {
+  preference: string;
+  oldValue: string | number | boolean;
+  newValue: string | number | boolean;
+  timestamp: string;
+}
+
+interface MemoryEntry {
+  key: string;
+  value: string;
+  timestamp: string;
+  importance: number;
+  source: 'conversation' | 'user-input' | 'system';
+}
+
 export class AIService {
   private baseUrl: string;
   private apiKey: string;
@@ -215,6 +237,9 @@ export class AIService {
   private maxMemoryItems: number;
   private learningRate: number;
   private adaptationThreshold: number;
+  private longTerm: Map<string, MemoryEntry>;
+  private userPreferences: Map<string, UserPreference>;
+  private preferenceHistory: PreferenceChange[];
 
   constructor(baseUrl: string, apiKey: string) {
     this.baseUrl = baseUrl;
@@ -223,6 +248,9 @@ export class AIService {
     this.maxMemoryItems = 1000;
     this.learningRate = 0.1;
     this.adaptationThreshold = 0.7;
+    this.longTerm = new Map<string, MemoryEntry>();
+    this.userPreferences = new Map<string, UserPreference>();
+    this.preferenceHistory = [];
     this.initializeMemorySystem();
   }
 
@@ -362,7 +390,7 @@ export class AIService {
     const preferences = await ollamaService.extractPreferences(message.content);
     preferences.forEach(pref => {
       const currentValue = this.memorySystem.adaptiveLearning.userPreferences.get(pref.key);
-      const newValue = this.adaptValue(currentValue, pref.value);
+      const newValue = this.adaptValue(currentValue ?? '', pref.value);
       this.memorySystem.adaptiveLearning.userPreferences.set(pref.key, newValue);
     });
 
@@ -378,7 +406,7 @@ export class AIService {
     // Update skill levels
     const skills = await this.extractSkills(message);
     skills.forEach(skill => {
-      const currentLevel = this.memorySystem.adaptiveLearning.skillLevels.get(skill) || 0;
+      const currentLevel = Number(this.memorySystem.adaptiveLearning.skillLevels.get(skill)) || 0;
       const newLevel = Math.min(currentLevel + this.learningRate, 1.0);
       this.memorySystem.adaptiveLearning.skillLevels.set(skill, newLevel);
     });
@@ -438,11 +466,19 @@ export class AIService {
     };
   }
 
-  private adaptValue(current: any, newValue: any): any {
-    if (typeof current === 'number' && typeof newValue === 'number') {
-      return current * (1 - this.learningRate) + newValue * this.learningRate;
+  private adaptValue(current: string | number | boolean, newValue: string | number | boolean): string | number | boolean {
+    if (typeof current === typeof newValue) {
+      return newValue;
     }
-    return newValue;
+    // Handle type conversion if needed
+    if (typeof current === 'number' && typeof newValue === 'string') {
+      const num = parseFloat(newValue);
+      return isNaN(num) ? current : num;
+    }
+    if (typeof current === 'boolean' && typeof newValue === 'string') {
+      return newValue.toLowerCase() === 'true';
+    }
+    return current;
   }
 
   private extractInteractionPattern(message: Message): string {
@@ -532,7 +568,7 @@ export class AIService {
     // Calculate relevance based on user preferences
     const preferences = Array.from(this.memorySystem.adaptiveLearning.userPreferences.entries());
     const preferenceMatch = preferences.reduce((sum, [key, value]) => {
-      return sum + (message.content.includes(key) ? value : 0);
+      return sum + (message.content.includes(key) ? (typeof value === 'number' ? value : 0) : 0);
     }, 0);
 
     return Math.min(preferenceMatch / preferences.length, 1);
@@ -669,7 +705,7 @@ export class AIService {
   private calculatePreferenceMatch(message: Message): number {
     const preferences = Array.from(this.memorySystem.adaptiveLearning.userPreferences.entries());
     const preferenceMatch = preferences.reduce((sum, [key, value]) => {
-      return sum + (message.content.includes(key) ? value : 0);
+      return sum + (message.content.includes(key) ? (typeof value === 'number' ? value : 0) : 0);
     }, 0);
 
     return Math.min(preferenceMatch / preferences.length, 1);

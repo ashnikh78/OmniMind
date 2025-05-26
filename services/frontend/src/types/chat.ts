@@ -29,8 +29,19 @@ export interface ChatSession {
   messages: ChatMessage[];
   context: {
     model: string;
-    parameters: Record<string, any>;
-    memory: Record<string, any>;
+    parameters: {
+      temperature?: number;
+      maxTokens?: number;
+      topP?: number;
+      frequencyPenalty?: number;
+      presencePenalty?: number;
+      [key: string]: unknown;
+    };
+    memory: {
+      shortTerm?: unknown[];
+      longTerm?: Record<string, unknown>;
+      [key: string]: unknown;
+    };
   };
   metadata: {
     created: string;
