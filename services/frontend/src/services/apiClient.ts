@@ -58,18 +58,11 @@ class ApiClient {
       const message = errorData.message || axiosError.message || 'An unexpected error occurred';
 
       if (status === 401) {
-        toast.error('Authentication required. Please log in again.');
-        // Optionally dispatch logout action here
+        toast.error('Please log in to continue');
       } else if (status === 403) {
-        toast.error('You do not have permission to perform this action.');
-      } else if (status === 404) {
-        toast.error('The requested resource was not found.');
-      } else if (status === 429) {
-        toast.error('Too many requests. Please try again later.');
+        toast.error('You do not have permission to perform this action');
       } else if (status >= 500) {
-        toast.error('Server error. Please try again later.');
-      } else {
-        toast.error(message);
+        toast.error('Server error. Please try again later');
       }
 
       return {
@@ -81,7 +74,6 @@ class ApiClient {
     }
 
     const genericError = error as Error;
-    toast.error(genericError.message || 'An unexpected error occurred');
     return {
       code: 'UNKNOWN_ERROR',
       message: genericError.message || 'An unexpected error occurred',

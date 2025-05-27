@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     # CORS
     BACKEND_CORS_ORIGINS: list = ["http://localhost", "http://localhost:80"]
     
+    # Ollama
+    OLLAMA_HOST: str = "http://localhost:11434"
+    
     # Security Headers
     SECURITY_HEADERS: dict = {
         "X-Content-Type-Options": "nosniff",

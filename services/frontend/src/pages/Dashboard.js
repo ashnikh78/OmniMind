@@ -38,19 +38,28 @@ function Dashboard() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    console.log('Dashboard mounted, user:', user);
     fetchDashboardData();
   }, []);
 
   const fetchDashboardData = async () => {
     try {
+      console.log('Fetching dashboard data...');
       setLoading(true);
       setError('');
       const response = await dashboardAPI.getDashboardData();
-      setStats(response.stats);
-      setRecentActivity(response.recentActivity);
+      console.log('Dashboard data received:', response);
+      
+      if (response.data) {
+        setStats(response.data.stats || {});
+        setRecentActivity(response.data.recentActivity || []);
+      } else {
+        console.error('Invalid response format:', response);
+        setError('Invalid response format from server');
+      }
     } catch (error) {
-      setError('Failed to load dashboard data');
       console.error('Error fetching dashboard data:', error);
+      setError(error.response?.data?.message || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
@@ -60,6 +69,16 @@ function Dashboard() {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
         <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (!user) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error">
+          Please log in to view the dashboard
+        </Alert>
       </Box>
     );
   }
@@ -171,36 +190,42 @@ function Dashboard() {
               }
             />
             <CardContent>
-              <List>
-                {recentActivity.map((activity, index) => (
-                  <React.Fragment key={activity.id}>
-                    <ListItem>
-                      <ListItemAvatar>
-                        <Avatar src={activity.user.avatar}>
-                          {activity.user.username[0]}
-                        </Avatar>
-                      </ListItemAvatar>
-                      <ListItemText
-                        primary={activity.description}
-                        secondary={
-                          <>
-                            <Typography
-                              component="span"
-                              variant="body2"
-                              color="text.primary"
-                            >
-                              {activity.user.username}
-                            </Typography>
-                            {' — '}
-                            {new Date(activity.timestamp).toLocaleString()}
-                          </>
-                        }
-                      />
-                    </ListItem>
-                    {index < recentActivity.length - 1 && <Divider />}
-                  </React.Fragment>
-                ))}
-              </List>
+              {recentActivity.length > 0 ? (
+                <List>
+                  {recentActivity.map((activity, index) => (
+                    <React.Fragment key={activity.id}>
+                      <ListItem>
+                        <ListItemAvatar>
+                          <Avatar src={activity.user?.avatar}>
+                            {activity.user?.username?.[0] || 'U'}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={activity.description}
+                          secondary={
+                            <>
+                              <Typography
+                                component="span"
+                                variant="body2"
+                                color="text.primary"
+                              >
+                                {activity.user?.username || 'Unknown User'}
+                              </Typography>
+                              {' — '}
+                              {new Date(activity.timestamp).toLocaleString()}
+                            </>
+                          }
+                        />
+                      </ListItem>
+                      {index < recentActivity.length - 1 && <Divider />}
+                    </React.Fragment>
+                  ))}
+                </List>
+              ) : (
+                <Typography color="text.secondary" align="center">
+                  No recent activity
+                </Typography>
+              )}
             </CardContent>
           </Card>
         </Grid>

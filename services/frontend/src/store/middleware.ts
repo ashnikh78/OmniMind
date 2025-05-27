@@ -27,16 +27,11 @@ export const errorHandlingMiddleware: Middleware = (store) => (next) => (action)
     if (apiError instanceof Error) {
       const status = apiError.status ?? 0;
       if (status === 401) {
-        errorMessage = 'Authentication required. Please log in again.';
-        // Optionally dispatch logout action here
+        errorMessage = 'Please log in to continue';
       } else if (status === 403) {
-        errorMessage = 'You do not have permission to perform this action.';
-      } else if (status === 404) {
-        errorMessage = 'The requested resource was not found.';
-      } else if (status === 429) {
-        errorMessage = 'Too many requests. Please try again later.';
+        errorMessage = 'You do not have permission to perform this action';
       } else if (status >= 500) {
-        errorMessage = 'Server error. Please try again later.';
+        errorMessage = 'Server error. Please try again later';
       } else {
         errorMessage = apiError.message || errorMessage;
       }
@@ -44,6 +39,6 @@ export const errorHandlingMiddleware: Middleware = (store) => (next) => (action)
 
     console.error('Error in middleware:', error);
     store.dispatch(setError(errorMessage));
-    throw error;
+    return next(action); // Continue execution instead of throwing
   }
 }; 

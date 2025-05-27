@@ -2,6 +2,8 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 
 // Update base URLs to use nginx proxy
+console.log('API URL:', process.env.REACT_APP_API_URL);
+console.log('NODE_ENV:', process.env.NODE_ENV);
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 const WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost';
 
@@ -10,9 +12,10 @@ const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
+    'Accept': 'application/json'
   },
-  withCredentials: true, // Important for CORS
-  timeout: 10000, // 10 seconds timeout
+  withCredentials: true,
+  timeout: 10000,
 });
 
 // WebSocket connection manager
@@ -25,21 +28,49 @@ class WebSocketManager {
     this.reconnectDelay = 1000;
     this.userId = null;
     this.token = null;
+    this.isConnecting = false;
+    this.heartbeatInterval = null;
+    this.lastHeartbeat = null;
+    this.heartbeatTimeout = 30000; // 30 seconds
   }
 
   connect(userId, token) {
+    if (!userId || !token) {
+      console.error('WebSocket connection requires userId and token');
+      return;
+    }
+    
     this.userId = userId;
     this.token = token;
     this.connectWebSocket();
   }
 
   connectWebSocket() {
-    const wsUrl = `${process.env.REACT_APP_WS_URL}?token=${this.token}`;
-    this.ws = new WebSocket(wsUrl);
+    if (this.isConnecting) {
+      console.log('WebSocket connection already in progress');
+      return;
+    }
+
+    this.isConnecting = true;
+    const wsUrl = `${WS_URL}/ws?token=${this.token}`;
+    
+    try {
+      this.ws = new WebSocket(wsUrl);
+      this.setupEventHandlers();
+    } catch (error) {
+      console.error('WebSocket connection error:', error);
+      this.handleReconnect();
+    }
+  }
+
+  setupEventHandlers() {
+    if (!this.ws) return;
 
     this.ws.onopen = () => {
       console.log('WebSocket connected');
+      this.isConnecting = false;
       this.reconnectAttempts = 0;
+      this.startHeartbeat();
       // Send initial presence message
       this.send({
         type: 'presence',
@@ -50,18 +81,28 @@ class WebSocketManager {
       });
     };
 
-    this.ws.onclose = () => {
-      console.log('WebSocket disconnected');
+    this.ws.onclose = (event) => {
+      console.log('WebSocket disconnected:', event.code, event.reason);
+      this.isConnecting = false;
+      this.stopHeartbeat();
       this.handleReconnect();
     };
 
     this.ws.onerror = (error) => {
       console.error('WebSocket error:', error);
+      this.isConnecting = false;
     };
 
     this.ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
+        
+        // Handle heartbeat response
+        if (message.type === 'heartbeat') {
+          this.lastHeartbeat = Date.now();
+          return;
+        }
+
         const handlers = this.messageHandlers.get(message.type) || [];
         handlers.forEach((handler) => handler(message.data));
       } catch (error) {
@@ -70,65 +111,99 @@ class WebSocketManager {
     };
   }
 
+  startHeartbeat() {
+    this.stopHeartbeat();
+    this.heartbeatInterval = setInterval(() => {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.send({ type: 'heartbeat' });
+        
+        // Check if we've missed heartbeats
+        if (this.lastHeartbeat && Date.now() - this.lastHeartbeat > this.heartbeatTimeout) {
+          console.warn('Missed heartbeat, reconnecting...');
+          this.ws.close();
+        }
+      }
+    }, 15000); // Send heartbeat every 15 seconds
+  }
+
+  stopHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
   handleReconnect() {
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++;
-      console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
-      setTimeout(() => this.connectWebSocket(), this.reconnectDelay * this.reconnectAttempts);
-    } else {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.error('Max reconnection attempts reached');
+      return;
+    }
+
+    this.reconnectAttempts++;
+    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+    console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);
+    
+    setTimeout(() => {
+      this.connectWebSocket();
+    }, delay);
+  }
+
+  onMessage(type, handler) {
+    const handlers = this.messageHandlers.get(type) || [];
+    handlers.push(handler);
+    this.messageHandlers.set(type, handlers);
+  }
+
+  offMessage(type, handler) {
+    const handlers = this.messageHandlers.get(type) || [];
+    const index = handlers.indexOf(handler);
+    if (index !== -1) {
+      handlers.splice(index, 1);
+      this.messageHandlers.set(type, handlers);
+    }
+  }
+
+  send(message) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(message));
+    } else {
+      console.error('WebSocket is not connected');
+      this.handleReconnect();
     }
   }
 
   disconnect() {
+    this.stopHeartbeat();
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
-    this.messageHandlers.clear();
-    this.userId = null;
-    this.token = null;
-  }
-
-  send(message) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(message));
-    } else {
-      console.error('WebSocket is not connected');
-    }
-  }
-
-  onMessage(type, handler) {
-    if (!this.messageHandlers.has(type)) {
-      this.messageHandlers.set(type, []);
-    }
-    this.messageHandlers.get(type).push(handler);
-  }
-
-  offMessage(type, handler) {
-    if (this.messageHandlers.has(type)) {
-      const handlers = this.messageHandlers.get(type);
-      const index = handlers.indexOf(handler);
-      if (index !== -1) {
-        handlers.splice(index, 1);
-      }
-    }
+    this.isConnecting = false;
+    this.reconnectAttempts = 0;
   }
 }
 
 // Create WebSocket manager instance
 const wsManager = new WebSocketManager();
 
-// Add request interceptor for authentication
+// Add request interceptor for logging and token handling
 api.interceptors.request.use(
   (config) => {
+    console.log('Making request to:', config.baseURL + config.url);
     const token = localStorage.getItem('token');
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      config.headers = {
+        ...config.headers,
+        'Authorization': `Bearer ${token}`
+      };
+      console.log('Request headers:', config.headers);
+    } else {
+      console.log('No token found in localStorage');
     }
     return config;
   },
   (error) => {
+    console.error('Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
@@ -136,13 +211,19 @@ api.interceptors.request.use(
 // Add response interceptor for error handling
 api.interceptors.response.use(
   (response) => {
+    console.log('Response received:', response.config.url, response.status);
     // Store token if it's a login response
     if (response.config.url.includes('/api/v1/auth/login') && response.data.access_token) {
-      localStorage.setItem('token', response.data.access_token);
+      const token = response.data.access_token;
+      localStorage.setItem('token', token);
+      // Update default headers with new token
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      console.log('Token stored and headers updated');
     }
     return response;
   },
   async (error) => {
+    console.error('Response error:', error.config?.url, error.response?.status);
     const originalRequest = error.config;
 
     // Handle 401 Unauthorized
@@ -152,24 +233,35 @@ api.interceptors.response.use(
         // Try to refresh token
         const token = localStorage.getItem('token');
         if (token) {
+          console.log('Attempting to refresh token...');
           const response = await api.post('/api/v1/auth/refresh', { token });
           const { access_token } = response.data;
           localStorage.setItem('token', access_token);
-          originalRequest.headers.Authorization = `Bearer ${access_token}`;
+          // Update default headers with new token
+          api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+          originalRequest.headers['Authorization'] = `Bearer ${access_token}`;
+          console.log('Token refreshed successfully');
           return api(originalRequest);
         }
       } catch (refreshError) {
+        console.error('Token refresh failed:', refreshError);
         // If refresh fails, logout user
         localStorage.removeItem('token');
+        delete api.defaults.headers.common['Authorization'];
         wsManager.disconnect();
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }
     }
 
-    // Handle other errors
-    const errorMessage = error.response?.data?.detail || error.response?.data?.message || 'An error occurred';
-    toast.error(errorMessage);
+    // Only show toast for critical errors
+    if (error.response?.status === 401) {
+      toast.error('Please log in to continue');
+    } else if (error.response?.status === 403) {
+      toast.error('You do not have permission to perform this action');
+    } else if (error.response?.status >= 500) {
+      toast.error('Server error. Please try again later');
+    }
 
     return Promise.reject(error);
   }
@@ -249,11 +341,88 @@ const analyticsAPI = {
 const mlServiceAPI = {
   getModels: () => api.get('/api/v1/ml/models'),
   getModel: (id) => api.get(`/api/v1/ml/models/${id}`),
-  createModel: (data) => api.post('/api/v1/ml/models', data),
-  updateModel: (id, data) => api.put(`/api/v1/ml/models/${id}`, data),
+  createModel: (data) => api.post(`/api/v1/ml/models`, data),
   deleteModel: (id) => api.delete(`/api/v1/ml/models/${id}`),
-  generateResponse: (data) => api.post('/api/v1/ml/generate', data),
-  streamResponse: (data) => api.post('/api/v1/ml/stream', data),
+  generateResponse: (data) => api.post('/api/v1/ml/inference', data),
+  streamResponse: async (data, onChunk, onComplete, onError) => {
+    try {
+      const response = await fetch('/api/v1/ml/inference/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...data,
+          stream: true
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n').filter(line => line.trim());
+
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line);
+            if (data.error) {
+              onError(data.error);
+              return;
+            }
+            onChunk(data.response);
+          } catch (e) {
+            console.error('Error parsing chunk:', e);
+          }
+        }
+      }
+
+      onComplete();
+    } catch (error) {
+      onError(error);
+    }
+  },
+  getModelMetrics: async (modelId) => {
+    try {
+      const response = await api.get(`/api/v1/ml/models/${modelId}/status`);
+      const modelStatus = response.data;
+      
+      return {
+        performance: {
+          accuracy: 0.95, // Default value since Ollama doesn't provide accuracy metrics
+          latency: modelStatus.gpu_memory > 0 ? 0.5 : 1.0, // Estimate based on GPU usage
+          throughput: 100, // Default value
+          error_rate: 0.05 // Default value
+        },
+        usage: {
+          requests: modelStatus.concurrent_requests,
+          tokens: 0, // Not provided by Ollama
+          latency: modelStatus.gpu_memory > 0 ? 0.5 : 1.0
+        },
+        errors: {
+          count: 0, // Not provided by Ollama
+          types: {
+            timeout: 0,
+            validation: 0,
+            other: 0
+          }
+        }
+      };
+    } catch (error) {
+      console.error('Error fetching model metrics:', error);
+      return null;
+    }
+  },
+  trainModel: (modelId, data) => api.post(`/api/v1/ml/models/${modelId}/train`, data),
+  deployModel: (modelId) => api.post(`/api/v1/ml/models/${modelId}/deploy`),
 };
 
 // Dashboard API
@@ -318,17 +487,16 @@ const chatAPI = {
 
 // Ollama API
 const ollamaAPI = {
-  getModels: () => api.get('/api/v1/ollama/models'),
-  chat: (data) => api.post('/api/v1/ollama/chat', data),
-  pullModel: (modelName) => api.post(`/api/v1/ollama/models/${modelName}/pull`),
-  deleteModel: (modelName) => api.delete(`/api/v1/ollama/models/${modelName}`),
-  getModelStatus: (modelName) => api.get(`/api/v1/ollama/models/${modelName}/status`),
+  getModels: () => api.get('/api/ollama/models'),
+  chat: (data) => api.post('/api/ollama/chat', data),
+  pullModel: (modelName) => api.post(`/api/ollama/models/${modelName}/pull`),
+  deleteModel: (modelName) => api.delete(`/api/ollama/models/${modelName}`),
+  getModelStatus: (modelName) => api.get(`/api/ollama/models/${modelName}/status`),
 };
 
 // Export everything
 export {
   api,
-  wsManager,
   authAPI,
   userAPI,
   activityAPI,
@@ -343,5 +511,6 @@ export {
   profileAPI,
   messagesAPI,
   chatAPI,
-  ollamaAPI
+  ollamaAPI,
+  wsManager
 }; 

@@ -20,6 +20,7 @@ import ollama
 import torch
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from config import settings
 
 # Configure logging
 logging.basicConfig(
@@ -70,7 +71,7 @@ def init_redis_client(max_retries=3, retry_delay=1):
     for attempt in range(max_retries):
         try:
             redis_client = redis.Redis(
-                host=os.getenv("REDIS_HOST", "redis"),
+                host=os.getenv("REDIS_HOST", "localhost"),
                 port=int(os.getenv("REDIS_PORT", 6379)),
                 password=os.getenv("REDIS_PASSWORD", "redis"),
                 db=0,
@@ -728,515 +729,6 @@ async def get_current_user_profile(request: Request):
         logger.error(f"Error in get_current_user_profile: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-# Update proxy routes to handle direct API requests
-@app.get("/api/{path:path}")
-async def proxy_get(path: str, request: Request):
-    try:
-        # Skip proxy for auth endpoints
-        if path.startswith("v1/auth/"):
-            raise HTTPException(status_code=404, detail="Not found")
-        
-        # Handle direct API requests
-        if path.startswith("v1/"):
-            # Extract the endpoint from the path
-            endpoint = path[3:]  # Remove 'v1/'
-            logger.info(f"Handling API request for endpoint: {endpoint}")
-            
-            # Handle specific endpoints
-            if endpoint == "profile":
-                try:
-                    # Get the authorization header
-                    auth_header = request.headers.get('Authorization')
-                    logger.debug(f"Auth header: {auth_header}")
-                    
-                    if not auth_header or not auth_header.startswith('Bearer '):
-                        logger.warning("No valid auth header found")
-                        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-                    
-                    # Extract the token
-                    token = auth_header.split(' ')[1]
-                    
-                    # Decode the token
-                    try:
-                        payload = jwt.decode(
-                            token,
-                            os.getenv("JWT_SECRET", "your-secret-key"),
-                            algorithms=["HS256"]
-                        )
-                        logger.debug(f"Decoded token payload: {payload}")
-                    except jwt.InvalidTokenError as e:
-                        logger.warning(f"Invalid token: {str(e)}")
-                        raise HTTPException(status_code=401, detail="Invalid token")
-                    
-                    # Get user ID from token
-                    user_id = payload.get("sub")
-                    if not user_id:
-                        logger.warning("No user_id in token payload")
-                        raise HTTPException(status_code=401, detail="Invalid token payload")
-                    
-                    # Get user data from Redis
-                    user_data = redis_client.get(f"user:{user_id}")
-                    if not user_data:
-                        raise HTTPException(status_code=404, detail="User not found")
-                    
-                    # Parse user data and remove sensitive information
-                    user = json.loads(user_data)
-                    user.pop("password", None)
-                    
-                    # Add additional profile information
-                    profile = {
-                        **user,
-                        "preferences": {
-                            "theme": "light",
-                            "notifications": {
-                                "email": True,
-                                "push": True,
-                                "desktop": True
-                            },
-                            "language": "en",
-                            "timezone": "UTC"
-                        },
-                        "stats": {
-                            "lastLogin": datetime.utcnow().isoformat(),
-                            "loginCount": 1,
-                            "documentCount": 0,
-                            "messageCount": 0
-                        },
-                        "roles": [user.get("role", "user")],
-                        "permissions": ["read", "write"] if user.get("role") == "admin" else ["read"]
-                    }
-                    
-                    logger.info(f"Successfully retrieved profile for user {user_id}")
-                    return profile
-                except HTTPException as he:
-                    raise he
-                except Exception as e:
-                    logger.error(f"Error handling profile request: {str(e)}")
-                    raise HTTPException(status_code=500, detail="Failed to retrieve profile")
-            elif endpoint == "dashboard":
-                try:
-                    # Get the authorization header
-                    auth_header = request.headers.get('Authorization')
-                    logger.debug(f"Auth header: {auth_header}")
-                    
-                    if not auth_header or not auth_header.startswith('Bearer '):
-                        logger.warning("No valid auth header found")
-                        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-                    
-                    # Extract the token
-                    token = auth_header.split(' ')[1]
-                    
-                    # Decode the token
-                    try:
-                        payload = jwt.decode(
-                            token,
-                            os.getenv("JWT_SECRET", "your-secret-key"),
-                            algorithms=["HS256"]
-                        )
-                        logger.debug(f"Decoded token payload: {payload}")
-                    except jwt.InvalidTokenError as e:
-                        logger.warning(f"Invalid token: {str(e)}")
-                        raise HTTPException(status_code=401, detail="Invalid token")
-                    
-                    # Get user ID from token
-                    user_id = payload.get("sub")
-                    if not user_id:
-                        logger.warning("No user_id in token payload")
-                        raise HTTPException(status_code=401, detail="Invalid token payload")
-                    
-                    # Return mock dashboard data
-                    return {
-                        "stats": {
-                            "messages": 42,
-                            "notifications": 5,
-                            "connections": 12,
-                            "activities": 28,
-                            "profileCompletion": 75,
-                            "lastLogin": datetime.utcnow().isoformat(),
-                            "accountStatus": "active"
-                        },
-                        "recentActivity": [
-                            {
-                                "id": "1",
-                                "description": "Logged in to the system",
-                                "timestamp": datetime.utcnow().isoformat(),
-                                "user": {
-                                    "id": user_id,
-                                    "username": "testuser",
-                                    "avatar": None
-                                }
-                            },
-                            {
-                                "id": "2",
-                                "description": "Updated profile information",
-                                "timestamp": datetime.utcnow().isoformat(),
-                                "user": {
-                                    "id": user_id,
-                                    "username": "testuser",
-                                    "avatar": None
-                                }
-                            }
-                        ]
-                    }
-                except HTTPException as he:
-                    raise he
-                except Exception as e:
-                    logger.error(f"Error handling dashboard request: {str(e)}")
-                    raise HTTPException(status_code=500, detail="Failed to retrieve dashboard data")
-            elif endpoint == "notifications":
-                try:
-                    # Get the authorization header
-                    auth_header = request.headers.get('Authorization')
-                    logger.debug(f"Auth header: {auth_header}")
-                    
-                    if not auth_header or not auth_header.startswith('Bearer '):
-                        logger.warning("No valid auth header found")
-                        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-                    
-                    # Extract the token
-                    token = auth_header.split(' ')[1]
-                    
-                    # Decode the token
-                    try:
-                        payload = jwt.decode(
-                            token,
-                            os.getenv("JWT_SECRET", "your-secret-key"),
-                            algorithms=["HS256"]
-                        )
-                        logger.debug(f"Decoded token payload: {payload}")
-                    except jwt.InvalidTokenError as e:
-                        logger.warning(f"Invalid token: {str(e)}")
-                        raise HTTPException(status_code=401, detail="Invalid token")
-                    
-                    # Get user ID from token
-                    user_id = payload.get("sub")
-                    if not user_id:
-                        logger.warning("No user_id in token payload")
-                        raise HTTPException(status_code=401, detail="Invalid token payload")
-                    
-                    # Return mock notifications
-                    return {
-                        "notifications": [
-                            {
-                                "id": "1",
-                                "type": "system",
-                                "title": "Welcome to OmniMind",
-                                "message": "Welcome to your new account!",
-                                "read": False,
-                                "created_at": datetime.utcnow().isoformat()
-                            },
-                            {
-                                "id": "2",
-                                "type": "alert",
-                                "title": "System Update",
-                                "message": "The system has been updated to the latest version.",
-                                "read": False,
-                                "created_at": datetime.utcnow().isoformat()
-                            }
-                        ]
-                    }
-                except HTTPException as he:
-                    raise he
-                except Exception as e:
-                    logger.error(f"Error handling notifications request: {str(e)}")
-                    raise HTTPException(status_code=500, detail="Failed to retrieve notifications")
-            elif endpoint == "rbac/roles":
-                return {
-                    "roles": [
-                        {"id": "role1", "name": "Admin", "permissions": ["all"]},
-                        {"id": "role2", "name": "User", "permissions": ["read"]}
-                    ]
-                }
-            elif endpoint == "rbac/permissions":
-                return {
-                    "permissions": [
-                        {"id": "perm1", "name": "read", "description": "Read access"},
-                        {"id": "perm2", "name": "write", "description": "Write access"}
-                    ]
-                }
-            elif endpoint == "tenants":
-                return {
-                    "tenants": [
-                        {"id": "tenant1", "name": "Default Tenant", "status": "active"}
-                    ]
-                }
-            elif endpoint == "activities":
-                return {
-                    "activities": []
-                }
-            elif endpoint == "ml/models":
-                return {
-                    "models": [
-                        {
-                            "id": "gpt-3",
-                            "name": "GPT-3",
-                            "status": "available",
-                            "description": "Large language model for text generation",
-                            "capabilities": ["text-generation", "chat", "completion"]
-                        },
-                        {
-                            "id": "bert",
-                            "name": "BERT",
-                            "status": "available",
-                            "description": "Bidirectional Encoder Representations from Transformers",
-                            "capabilities": ["text-classification", "question-answering"]
-                        }
-                    ]
-                }
-            else:
-                logger.warning(f"Endpoint not found: {endpoint}")
-                raise HTTPException(status_code=404, detail=f"Endpoint {endpoint} not found")
-        else:
-            logger.warning(f"Invalid API path: {path}")
-            raise HTTPException(status_code=404, detail="Invalid API path")
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        logger.error(f"Error handling API request: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
-
-@app.post("/api/{path:path}")
-async def proxy_post(path: str, request: Request):
-    # Skip proxy for auth endpoints
-    if path.startswith("v1/auth/"):
-        raise HTTPException(status_code=404, detail="Not found")
-    
-    try:
-        target_url = f"http://{path}"
-        body = await request.json()
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(target_url, json=body)
-            return JSONResponse(content=response.json(), status_code=response.status_code)
-    except httpx.RequestError as e:
-        logger.error(f"Proxy request error: {str(e)}")
-        raise HTTPException(status_code=502, detail="Bad Gateway")
-    except Exception as e:
-        logger.error(f"Unexpected error in proxy: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
-
-@app.put("/api/{path:path}")
-async def proxy_put(path: str, request: Request):
-    # Skip proxy for auth endpoints
-    if path.startswith("v1/auth/"):
-        raise HTTPException(status_code=404, detail="Not found")
-    
-    try:
-        target_url = f"http://{path}"
-        body = await request.json()
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.put(target_url, json=body)
-            return JSONResponse(content=response.json(), status_code=response.status_code)
-    except httpx.RequestError as e:
-        logger.error(f"Proxy request error: {str(e)}")
-        raise HTTPException(status_code=502, detail="Bad Gateway")
-    except Exception as e:
-        logger.error(f"Unexpected error in proxy: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
-
-@app.delete("/api/{path:path}")
-async def proxy_delete(path: str, request: Request):
-    # Skip proxy for auth endpoints
-    if path.startswith("v1/auth/"):
-        raise HTTPException(status_code=404, detail="Not found")
-    
-    try:
-        target_url = f"http://{path}"
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.delete(target_url)
-            return JSONResponse(content=response.json(), status_code=response.status_code)
-    except httpx.RequestError as e:
-        logger.error(f"Proxy request error: {str(e)}")
-        raise HTTPException(status_code=502, detail="Bad Gateway")
-    except Exception as e:
-        logger.error(f"Unexpected error in proxy: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
-
-# Real-time event endpoints
-@app.post("/api/events")
-async def create_event(event: dict):
-    # Store event in Redis
-    event_id = redis_client.incr("event_counter")
-    event["id"] = event_id
-    event["timestamp"] = datetime.utcnow().isoformat()
-    
-    # Store event in Redis
-    redis_client.set(f"event:{event_id}", json.dumps(event))
-    redis_client.expire(f"event:{event_id}", 86400)  # Expire after 24 hours
-    
-    # Add to recent events list
-    redis_client.lpush("recent_events", json.dumps(event))
-    redis_client.ltrim("recent_events", 0, 99)  # Keep only last 100 events
-    
-    # Broadcast event to all connected clients
-    await manager.broadcast({
-        "type": "event",
-        "data": event
-    })
-    
-    return event
-
-@app.get("/api/events")
-async def get_events(limit: int = 10):
-    events = []
-    for event_json in redis_client.lrange("recent_events", 0, limit - 1):
-        events.append(json.loads(event_json))
-    return events
-
-@app.get("/api/events/{event_id}")
-async def get_event(event_id: int):
-    event_json = redis_client.get(f"event:{event_id}")
-    if not event_json:
-        raise HTTPException(status_code=404, detail="Event not found")
-    return json.loads(event_json)
-
-# System metrics endpoint
-@app.get("/api/metrics")
-async def get_metrics():
-    metrics = {
-        "active_connections": len(manager.user_connections),
-        "total_events": int(redis_client.get("event_counter") or 0),
-        "recent_events_count": redis_client.llen("recent_events"),
-        "redis_memory_used": redis_client.info()["used_memory_human"],
-        "uptime": time.time() - start_time
-    }
-    return metrics
-
-# Add new endpoints for user presence
-@app.get("/api/presence")
-async def get_presence():
-    return user_presence.get_online_users()
-
-@app.get("/api/presence/{user_id}/activities")
-async def get_user_activities(user_id: str, limit: int = 10):
-    return user_presence.get_user_activities(user_id, limit)
-
-# Add real-time analytics endpoints
-@app.get("/api/analytics/realtime")
-async def get_realtime_analytics():
-    try:
-        metrics = {
-            "active_users": len(manager.user_connections),
-            "total_connections": sum(len(conns) for conns in manager.active_connections.values()),
-            "user_roles": {},
-            "recent_activities": [],
-            "system_metrics": {
-                "cpu_usage": psutil.Process().cpu_percent(),
-                "memory_usage": psutil.Process().memory_info().rss,
-                "uptime": time.time() - start_time
-            }
-        }
-
-        # Count users by role
-        for user_data in manager.user_data.values():
-            role = user_data.get("role", "unknown")
-            metrics["user_roles"][role] = metrics["user_roles"].get(role, 0) + 1
-
-        # Get recent activities
-        for user_id, activities in user_presence.user_activities.items():
-            metrics["recent_activities"].extend(activities[-5:])  # Last 5 activities per user
-
-        # Sort activities by timestamp
-        metrics["recent_activities"].sort(key=lambda x: x["timestamp"], reverse=True)
-        metrics["recent_activities"] = metrics["recent_activities"][:20]  # Keep last 20 activities
-
-        # Add Redis metrics
-        try:
-            redis_info = redis_client.info()
-            metrics["redis"] = {
-                "connected_clients": redis_info.get("connected_clients", 0),
-                "used_memory": redis_info.get("used_memory_human", "0"),
-                "total_connections_received": redis_info.get("total_connections_received", 0)
-            }
-        except redis.RedisError as e:
-            logger.error(f"Error getting Redis metrics: {str(e)}")
-            metrics["redis"] = {
-                "error": "Failed to get Redis metrics"
-            }
-
-        return metrics
-    except Exception as e:
-        logger.error(f"Error in get_realtime_analytics: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-# Enhanced analytics endpoint
-@app.get("/api/analytics/enhanced")
-async def get_enhanced_analytics():
-    try:
-        metrics = {
-            "system": {
-                "active_connections": len(manager.user_connections),
-                "total_events": int(redis_client.get("event_counter") or 0),
-                "recent_events_count": redis_client.llen("recent_events"),
-                "redis_memory_used": redis_client.info().get("used_memory_human", "0"),
-                "uptime": time.time() - start_time,
-                "memory_usage": psutil.Process().memory_info().rss,
-                "cpu_usage": psutil.Process().cpu_percent(),
-            },
-            "users": {
-                "active_users": len(manager.user_connections),
-                "user_roles": {},
-                "user_status": {
-                    "online": 0,
-                    "away": 0,
-                    "busy": 0,
-                    "offline": 0
-                },
-                "recent_activities": []
-            },
-            "chat": {
-                "total_messages": int(redis_client.get("chat_message_counter") or 0),
-                "messages_last_hour": redis_client.llen("recent_chat_messages"),
-                "active_chats": len(set(msg["sender_id"] for msg in json.loads(redis_client.lrange("recent_chat_messages", 0, -1)))),
-                "file_uploads": {
-                    "total": int(redis_client.get("file_upload_counter") or 0),
-                    "by_type": {}
-                }
-            },
-            "performance": {
-                "request_counts": {
-                    "total": analytics.request_counts._value.get(),
-                    "by_endpoint": {},
-                    "by_status": {}
-                },
-                "latency": {
-                    "average": analytics.request_latency._sum.get() / analytics.request_latency._count.get() if analytics.request_latency._count.get() > 0 else 0,
-                    "p95": analytics.request_latency.observe(0.95),
-                    "p99": analytics.request_latency.observe(0.99)
-                },
-                "errors": {
-                    "total": analytics.error_count._value.get(),
-                    "by_type": {}
-                }
-            }
-        }
-
-        # Count users by role and status
-        for user_data in manager.user_data.values():
-            role = user_data.get("role", "unknown")
-            metrics["users"]["user_roles"][role] = metrics["users"]["user_roles"].get(role, 0) + 1
-            
-            status = user_presence.online_users.get(user_data["id"], {}).get("status", "offline")
-            metrics["users"]["user_status"][status] = metrics["users"]["user_status"].get(status, 0) + 1
-
-        # Get recent activities
-        for user_id, activities in user_presence.user_activities.items():
-            metrics["users"]["recent_activities"].extend(activities[-5:])
-
-        # Sort activities by timestamp
-        metrics["users"]["recent_activities"].sort(key=lambda x: x["timestamp"], reverse=True)
-        metrics["users"]["recent_activities"] = metrics["users"]["recent_activities"][:20]
-
-        # Get file upload statistics
-        file_types = redis_client.hgetall("file_uploads_by_type")
-        metrics["chat"]["file_uploads"]["by_type"] = {
-            k: int(v) for k, v in file_types.items()
-        }
-
-        return metrics
-    except Exception as e:
-        logger.error(f"Error in get_enhanced_analytics: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
 # Document models
 class Document(BaseModel):
     id: str
@@ -1549,251 +1041,368 @@ async def get_model_status(model_name: str):
 @app.get("/api/v1/ml/models")
 async def get_ml_models():
     try:
-        # Return list of available ML models
-        return {
-            "models": [
-                {
-                    "id": "gpt-3",
-                    "name": "GPT-3",
-                    "status": "available",
-                    "description": "Large language model for text generation",
-                    "capabilities": ["text-generation", "chat", "completion"]
-                },
-                {
-                    "id": "bert",
-                    "name": "BERT",
-                    "status": "available",
-                    "description": "Bidirectional Encoder Representations from Transformers",
-                    "capabilities": ["text-classification", "question-answering"]
+        return [
+            {
+                "id": "model-1",
+                "name": "GPT-4",
+                "status": "active",
+                "description": "Advanced language model for text generation and analysis",
+                "capabilities": ["text-generation", "code-completion", "translation"],
+                "metrics": {
+                    "accuracy": 0.95,
+                    "latency": 0.5,
+                    "throughput": 100
                 }
-            ]
-        }
+            },
+            {
+                "id": "model-2",
+                "name": "DALL-E 3",
+                "status": "active",
+                "description": "Image generation model",
+                "capabilities": ["image-generation", "image-editing"],
+                "metrics": {
+                    "quality_score": 0.92,
+                    "generation_time": 2.5,
+                    "success_rate": 0.98
+                }
+            },
+            {
+                "id": "model-3",
+                "name": "Whisper",
+                "status": "active",
+                "description": "Speech recognition model",
+                "capabilities": ["speech-to-text", "transcription"],
+                "metrics": {
+                    "accuracy": 0.94,
+                    "processing_time": 1.2,
+                    "language_support": 50
+                }
+            }
+        ]
     except Exception as e:
         logger.error(f"Error in get_ml_models: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to retrieve ML models")
 
-@app.get("/api/v1/tenants")
-async def get_tenants():
+@app.get("/api/v1/ml/models/{model_id}")
+async def get_ml_model(model_id: str):
     try:
-        # Return list of tenants
-        return {
-            "tenants": [
-                {"id": "tenant1", "name": "Default Tenant", "status": "active"}
-            ]
+        # Mock data for a single model
+        model = {
+            "id": model_id,
+            "name": "GPT-4",
+            "status": "active",
+            "description": "Advanced language model for text generation and analysis",
+            "capabilities": ["text-generation", "code-completion", "translation"],
+            "metrics": {
+                "accuracy": 0.95,
+                "latency": 0.5,
+                "throughput": 100
+            },
+            "config": {
+                "max_tokens": 2048,
+                "temperature": 0.7,
+                "top_p": 0.9
+            }
         }
+        return model
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error in get_ml_model: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve ML model")
 
-@app.get("/api/v1/rbac/roles")
-async def get_roles():
+@app.get("/api/v1/ml/models/{model_id}/metrics")
+async def get_ml_model_metrics(model_id: str):
     try:
-        # Return list of roles
+        # Return stable mock data with all required fields
         return {
-            "roles": [
-                {"id": "role1", "name": "Admin", "permissions": ["all"]},
-                {"id": "role2", "name": "User", "permissions": ["read"]}
-            ]
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/v1/rbac/permissions")
-async def get_permissions():
-    try:
-        # Return list of permissions
-        return {
-            "permissions": [
-                {"id": "perm1", "name": "read", "description": "Read access"},
-                {"id": "perm2", "name": "write", "description": "Write access"}
-            ]
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/v1/notifications")
-async def get_notifications(request: Request):
-    try:
-        # Get the authorization header
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-        
-        # Extract the token
-        token = auth_header.split(' ')[1]
-        
-        # Decode the token
-        try:
-            payload = jwt.decode(
-                token,
-                os.getenv("JWT_SECRET", "your-secret-key"),
-                algorithms=["HS256"]
-            )
-        except jwt.InvalidTokenError:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        
-        # Get user ID from token
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token payload")
-        
-        # Return mock notifications
-        return {
-            "notifications": [
-                {
-                    "id": "1",
-                    "type": "system",
-                    "title": "Welcome to OmniMind",
-                    "message": "Welcome to your new account!",
-                    "read": False,
-                    "created_at": datetime.utcnow().isoformat()
-                },
-                {
-                    "id": "2",
-                    "type": "alert",
-                    "title": "System Update",
-                    "message": "The system has been updated to the latest version.",
-                    "read": False,
-                    "created_at": datetime.utcnow().isoformat()
+            "performance": {
+                "accuracy": 0.95,
+                "latency": 0.5,
+                "throughput": 100,
+                "error_rate": 0.05
+            },
+            "usage": {
+                "requests": 1000,
+                "tokens": 50000,
+                "latency": 0.5
+            },
+            "errors": {
+                "count": 50,
+                "types": {
+                    "timeout": 20,
+                    "validation": 15,
+                    "other": 15
                 }
-            ]
+            }
         }
-    except HTTPException as he:
-        raise he
     except Exception as e:
-        logger.error(f"Error in get_notifications: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve notifications")
-
-@app.get("/api/v1/dashboard")
-async def get_dashboard_data(request: Request):
-    try:
-        # Get the authorization header
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-        
-        # Extract the token
-        token = auth_header.split(' ')[1]
-        
-        # Decode the token
-        try:
-            payload = jwt.decode(
-                token,
-                os.getenv("JWT_SECRET", "your-secret-key"),
-                algorithms=["HS256"]
-            )
-        except jwt.InvalidTokenError:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        
-        # Get user ID from token
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token payload")
-        
-        # Return mock dashboard data
+        logger.error(f"Error in get_ml_model_metrics: {str(e)}")
+        # Return a default response instead of raising an error
         return {
-            "stats": {
-                "messages": 42,
-                "notifications": 5,
-                "connections": 12,
-                "activities": 28,
-                "profileCompletion": 75,
-                "lastLogin": datetime.utcnow().isoformat(),
-                "accountStatus": "active"
+            "performance": {
+                "accuracy": 0,
+                "latency": 0,
+                "throughput": 0,
+                "error_rate": 0
             },
-            "recentActivity": [
-                {
-                    "id": "1",
-                    "description": "Logged in to the system",
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "user": {
-                        "id": user_id,
-                        "username": "testuser",
-                        "avatar": None
-                    }
-                },
-                {
-                    "id": "2",
-                    "description": "Updated profile information",
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "user": {
-                        "id": user_id,
-                        "username": "testuser",
-                        "avatar": None
-                    }
-                }
-            ]
+            "usage": {
+                "requests": 0,
+                "tokens": 0,
+                "latency": 0
+            },
+            "errors": {
+                "count": 0,
+                "types": {}
+            }
         }
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        logger.error(f"Error in get_dashboard_data: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve dashboard data")
 
-@app.get("/api/v1/profile")
-async def get_profile(request: Request):
+# --- CATCH-ALL PROXY ROUTES ---
+
+@app.get("/api/{path:path}")
+async def proxy_get(path: str, request: Request):
     try:
-        # Get the authorization header
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-        
-        # Extract the token
-        token = auth_header.split(' ')[1]
-        
-        # Decode the token
-        try:
-            payload = jwt.decode(
-                token,
-                os.getenv("JWT_SECRET", "your-secret-key"),
-                algorithms=["HS256"]
-            )
-        except jwt.InvalidTokenError:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        
-        # Get user ID from token
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token payload")
-        
-        # Get user data from Redis
-        user_data = redis_client.get(f"user:{user_id}")
-        if not user_data:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        # Parse user data and remove sensitive information
-        user = json.loads(user_data)
-        user.pop("password", None)
-        
-        # Add additional profile information
-        profile = {
-            **user,
-            "preferences": {
-                "theme": "light",
-                "notifications": {
-                    "email": True,
-                    "push": True,
-                    "desktop": True
-                },
-                "language": "en",
-                "timezone": "UTC"
-            },
-            "stats": {
-                "lastLogin": datetime.utcnow().isoformat(),
-                "loginCount": 1,
-                "documentCount": 0,
-                "messageCount": 0
-            },
-            "roles": [user.get("role", "user")],
-            "permissions": ["read", "write"] if user.get("role") == "admin" else ["read"]
-        }
-        
-        logger.info(f"Successfully retrieved profile for user {user_id}")
-        return profile
-    except HTTPException as he:
-        raise he
+        # Handle Ollama endpoints directly
+        if path.startswith("ollama/"):
+            target_url = f"{settings.OLLAMA_HOST}/api/{path.replace('ollama/', '')}"
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(target_url)
+                return JSONResponse(content=response.json(), status_code=response.status_code)
+        # Handle other API endpoints
+        target_url = f"http://{path}"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(target_url)
+            return JSONResponse(content=response.json(), status_code=response.status_code)
+    except httpx.RequestError as e:
+        logger.error(f"Proxy request error: {str(e)}")
+        raise HTTPException(status_code=502, detail="Bad Gateway")
     except Exception as e:
-        logger.error(f"Error in get_profile: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve profile")
+        logger.error(f"Unexpected error in proxy: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+@app.post("/api/{path:path}")
+async def proxy_post(path: str, request: Request):
+    try:
+        # Handle Ollama endpoints directly
+        if path.startswith("ollama/"):
+            target_url = f"{settings.OLLAMA_HOST}/api/{path.replace('ollama/', '')}"
+            body = await request.json()
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(target_url, json=body)
+                return JSONResponse(content=response.json(), status_code=response.status_code)
+        # Handle other API endpoints
+        target_url = f"http://{path}"
+        body = await request.json()
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(target_url, json=body)
+            return JSONResponse(content=response.json(), status_code=response.status_code)
+    except httpx.RequestError as e:
+        logger.error(f"Proxy request error: {str(e)}")
+        raise HTTPException(status_code=502, detail="Bad Gateway")
+    except Exception as e:
+        logger.error(f"Unexpected error in proxy: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+@app.delete("/api/{path:path}")
+async def proxy_delete(path: str, request: Request):
+    # Skip proxy for auth endpoints
+    if path.startswith("v1/auth/"):
+        raise HTTPException(status_code=404, detail="Not found")
+    try:
+        target_url = f"http://{path}"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.delete(target_url)
+            return JSONResponse(content=response.json(), status_code=response.status_code)
+    except httpx.RequestError as e:
+        logger.error(f"Proxy request error: {str(e)}")
+        raise HTTPException(status_code=502, detail="Bad Gateway")
+    except Exception as e:
+        logger.error(f"Unexpected error in proxy: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+# Real-time event endpoints
+@app.post("/api/events")
+async def create_event(event: dict):
+    # Store event in Redis
+    event_id = redis_client.incr("event_counter")
+    event["id"] = event_id
+    event["timestamp"] = datetime.utcnow().isoformat()
+    
+    # Store event in Redis
+    redis_client.set(f"event:{event_id}", json.dumps(event))
+    redis_client.expire(f"event:{event_id}", 86400)  # Expire after 24 hours
+    
+    # Add to recent events list
+    redis_client.lpush("recent_events", json.dumps(event))
+    redis_client.ltrim("recent_events", 0, 99)  # Keep only last 100 events
+    
+    # Broadcast event to all connected clients
+    await manager.broadcast({
+        "type": "event",
+        "data": event
+    })
+    
+    return event
+
+@app.get("/api/events")
+async def get_events(limit: int = 10):
+    events = []
+    for event_json in redis_client.lrange("recent_events", 0, limit - 1):
+        events.append(json.loads(event_json))
+    return events
+
+@app.get("/api/events/{event_id}")
+async def get_event(event_id: int):
+    event_json = redis_client.get(f"event:{event_id}")
+    if not event_json:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return json.loads(event_json)
+
+# System metrics endpoint
+@app.get("/api/metrics")
+async def get_metrics():
+    metrics = {
+        "active_connections": len(manager.user_connections),
+        "total_events": int(redis_client.get("event_counter") or 0),
+        "recent_events_count": redis_client.llen("recent_events"),
+        "redis_memory_used": redis_client.info()["used_memory_human"],
+        "uptime": time.time() - start_time
+    }
+    return metrics
+
+# Add new endpoints for user presence
+@app.get("/api/presence")
+async def get_presence():
+    return user_presence.get_online_users()
+
+@app.get("/api/presence/{user_id}/activities")
+async def get_user_activities(user_id: str, limit: int = 10):
+    return user_presence.get_user_activities(user_id, limit)
+
+# Add real-time analytics endpoints
+@app.get("/api/analytics/realtime")
+async def get_realtime_analytics():
+    try:
+        metrics = {
+            "active_users": len(manager.user_connections),
+            "total_connections": sum(len(conns) for conns in manager.active_connections.values()),
+            "user_roles": {},
+            "recent_activities": [],
+            "system_metrics": {
+                "cpu_usage": psutil.Process().cpu_percent(),
+                "memory_usage": psutil.Process().memory_info().rss,
+                "uptime": time.time() - start_time
+            }
+        }
+
+        # Count users by role
+        for user_data in manager.user_data.values():
+            role = user_data.get("role", "unknown")
+            metrics["user_roles"][role] = metrics["user_roles"].get(role, 0) + 1
+
+        # Get recent activities
+        for user_id, activities in user_presence.user_activities.items():
+            metrics["recent_activities"].extend(activities[-5:])  # Last 5 activities per user
+
+        # Sort activities by timestamp
+        metrics["recent_activities"].sort(key=lambda x: x["timestamp"], reverse=True)
+        metrics["recent_activities"] = metrics["recent_activities"][:20]  # Keep last 20 activities
+
+        # Add Redis metrics
+        try:
+            redis_info = redis_client.info()
+            metrics["redis"] = {
+                "connected_clients": redis_info.get("connected_clients", 0),
+                "used_memory": redis_info.get("used_memory_human", "0"),
+                "total_connections_received": redis_info.get("total_connections_received", 0)
+            }
+        except redis.RedisError as e:
+            logger.error(f"Error getting Redis metrics: {str(e)}")
+            metrics["redis"] = {
+                "error": "Failed to get Redis metrics"
+            }
+
+        return metrics
+    except Exception as e:
+        logger.error(f"Error in get_realtime_analytics: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+# Enhanced analytics endpoint
+@app.get("/api/analytics/enhanced")
+async def get_enhanced_analytics():
+    try:
+        metrics = {
+            "system": {
+                "active_connections": len(manager.user_connections),
+                "total_events": int(redis_client.get("event_counter") or 0),
+                "recent_events_count": redis_client.llen("recent_events"),
+                "redis_memory_used": redis_client.info().get("used_memory_human", "0"),
+                "uptime": time.time() - start_time,
+                "memory_usage": psutil.Process().memory_info().rss,
+                "cpu_usage": psutil.Process().cpu_percent(),
+            },
+            "users": {
+                "active_users": len(manager.user_connections),
+                "user_roles": {},
+                "user_status": {
+                    "online": 0,
+                    "away": 0,
+                    "busy": 0,
+                    "offline": 0
+                },
+                "recent_activities": []
+            },
+            "chat": {
+                "total_messages": int(redis_client.get("chat_message_counter") or 0),
+                "messages_last_hour": redis_client.llen("recent_chat_messages"),
+                "active_chats": len(set(msg["sender_id"] for msg in json.loads(redis_client.lrange("recent_chat_messages", 0, -1)))),
+                "file_uploads": {
+                    "total": int(redis_client.get("file_upload_counter") or 0),
+                    "by_type": {}
+                }
+            },
+            "performance": {
+                "request_counts": {
+                    "total": analytics.request_counts._value.get(),
+                    "by_endpoint": {},
+                    "by_status": {}
+                },
+                "latency": {
+                    "average": analytics.request_latency._sum.get() / analytics.request_latency._count.get() if analytics.request_latency._count.get() > 0 else 0,
+                    "p95": analytics.request_latency.observe(0.95),
+                    "p99": analytics.request_latency.observe(0.99)
+                },
+                "errors": {
+                    "total": analytics.error_count._value.get(),
+                    "by_type": {}
+                }
+            }
+        }
+
+        # Count users by role and status
+        for user_data in manager.user_data.values():
+            role = user_data.get("role", "unknown")
+            metrics["users"]["user_roles"][role] = metrics["users"]["user_roles"].get(role, 0) + 1
+            
+            status = user_presence.online_users.get(user_data["id"], {}).get("status", "offline")
+            metrics["users"]["user_status"][status] = metrics["users"]["user_status"].get(status, 0) + 1
+
+        # Get recent activities
+        for user_id, activities in user_presence.user_activities.items():
+            metrics["users"]["recent_activities"].extend(activities[-5:])
+
+        # Sort activities by timestamp
+        metrics["users"]["recent_activities"].sort(key=lambda x: x["timestamp"], reverse=True)
+        metrics["users"]["recent_activities"] = metrics["users"]["recent_activities"][:20]
+
+        # Get file upload statistics
+        file_types = redis_client.hgetall("file_uploads_by_type")
+        metrics["chat"]["file_uploads"]["by_type"] = {
+            k: int(v) for k, v in file_types.items()
+        }
+
+        return metrics
+    except Exception as e:
+        logger.error(f"Error in get_enhanced_analytics: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 if __name__ == "__main__":
     import uvicorn

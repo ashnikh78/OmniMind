@@ -20,7 +20,6 @@ import {
   Alert,
   CircularProgress,
   Tooltip,
-  Badge,
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
