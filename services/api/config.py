@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     
     # Database
-    DATABASE_URL: str = "postgresql://postgres:postgres@db:5432/omnimind"
-    
+    #DATABASE_URL: str = "postgresql://postgres:postgres@db:5432/omnimind"
+    DATABASE_URL: str = "postgresql://admin:admin@db:5432/omnimind"
     # Redis
     REDIS_URL: str = "redis://:redis@localhost:6380/0"
     REDIS_PASSWORD: str = "redis"
