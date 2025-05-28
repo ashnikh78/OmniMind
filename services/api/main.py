@@ -22,6 +22,9 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from database import get_db, Base
 from config import settings
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base
 
 # Configure logging
 logging.basicConfig(

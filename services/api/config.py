@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://postgres:postgres@db:5432/omnimind"
     
     # Redis
-    REDIS_URL: str = "redis://:redis@redis:6379/0"
+    REDIS_URL: str = "redis://:redis@localhost:6380/0"
     REDIS_PASSWORD: str = "redis"
     
     # CORS
