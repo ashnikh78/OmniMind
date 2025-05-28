@@ -25,6 +25,7 @@ from config import settings
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import declarative_base
+from fastapi.openapi.utils import get_openapi
 
 # Configure logging
 logging.basicConfig(
@@ -70,7 +71,31 @@ app = FastAPI(
     title="OmniMind API Gateway",
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
+from fastapi.openapi.utils import get_openapi
 
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title="OmniMind API Gateway",
+        version="1.0.0",
+        description="API documentation for OmniMind AI",
+        routes=app.routes,
+    )
+    openapi_schema["components"]["securitySchemes"] = {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+        }
+    }
+    for path in openapi_schema["paths"].values():
+        for method in path.values():
+            method.setdefault("security", [{"BearerAuth": []}])
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 # CORS middleware with proper configuration
 app.add_middleware(
     CORSMiddleware,
@@ -967,12 +992,19 @@ async def chat_with_model(request: Dict[str, Any]):
         model_name = request.get("model", "llama2")
         message = request.get("content", "")
         settings = request.get("settings", {})
+        persona = request.get("persona", None)  # NEW: persona support
 
         model = await get_or_create_model(model_name)
         
+        # NEW: Add persona context to prompt if provided
+        if persona:
+            prompt = f"[Persona: {persona.get('name', persona)}]\n{persona.get('prompt', '')}\n\n{message}"
+        else:
+            prompt = message
+
         # Generate response
         response = await model.generate(
-            prompt=message,
+            prompt=prompt,
             temperature=settings.get("temperature", 0.7),
             max_tokens=settings.get("maxTokens", 2048),
             top_p=settings.get("topP", 0.9)
@@ -988,6 +1020,7 @@ async def chat_with_model(request: Dict[str, Any]):
             "content": response["response"],
             "timestamp": datetime.utcnow().isoformat(),
             "model": model_name,
+            "persona": persona,  # NEW: include persona in response
             "settings": settings,
             "metrics": {
                 "latency": response["latency"],

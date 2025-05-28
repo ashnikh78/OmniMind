@@ -1,0 +1,19 @@
+I want to transform my current React/TypeScript AI chat application into a fully functional, production-ready SaaS AI tool for enterprise customers.
+
+Please:
+
+Refactor and modularize the codebase for scalability and maintainability.
+Add user authentication (with enterprise SSO options like SAML/OAuth2).
+Implement multi-tenant support (each company/customer has isolated data and settings).
+Add a robust backend (Node.js/Express or Next.js API routes) with a database (PostgreSQL or MongoDB) for storing users, organizations, chat history, and persona configurations.
+Integrate billing/subscription management (Stripe or similar).
+Add admin dashboards for organization/user management and analytics.
+Ensure secure API endpoints and proper data validation.
+Add environment-based configuration and logging.
+Make the UI responsive and accessible, with enterprise branding options.
+Add audit logging and GDPR-compliant data controls (export/delete).
+Provide API endpoints for enterprise integration (webhooks, data export, etc).
+Add unit and integration tests.
+You are allowed to make direct changes to my code, create new files, and scaffold new modules as needed.
+Please provide code snippets or full files for each major change, and explain any architectural decisions.
+
