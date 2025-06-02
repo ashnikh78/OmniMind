@@ -1,15 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box,
-  Paper,
-  Typography,
-  TextField,
-  InputAdornment,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Divider,
   IconButton,
   Drawer,
   useTheme,
@@ -21,7 +12,6 @@ import {
   Alert,
 } from '@mui/material';
 import {
-  Search as SearchIcon,
   Menu as MenuIcon,
   Bookmark as BookmarkIcon,
   Code as CodeIcon,
@@ -29,8 +19,6 @@ import {
   Architecture as ArchitectureIcon,
   NavigateNext as NavigateNextIcon,
   NavigateBefore as NavigateBeforeIcon,
-  Home as HomeIcon,
-  Toc as TocIcon,
   Brightness4 as DarkModeIcon,
   Brightness7 as LightModeIcon,
   Print as PrintIcon,
@@ -38,7 +26,6 @@ import {
   Share as ShareIcon,
   PictureAsPdf as PdfIcon,
 } from '@mui/icons-material';
-import { styled } from '@mui/material/styles';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -46,114 +33,16 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 
-const StyledPaper = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(3),
-  height: '100%',
-  overflow: 'auto',
-  '& pre': {
-    margin: theme.spacing(2, 0),
-    borderRadius: theme.spacing(1),
-  },
-  '& code': {
-    fontFamily: 'monospace',
-  },
-  '& img': {
-    maxWidth: '100%',
-    height: 'auto',
-    borderRadius: theme.spacing(1),
-  },
-  '& table': {
-    width: '100%',
-    borderCollapse: 'collapse',
-    margin: theme.spacing(2, 0),
-  },
-  '& th, & td': {
-    border: `1px solid ${theme.palette.divider}`,
-    padding: theme.spacing(1),
-  },
-  '& th': {
-    backgroundColor: theme.palette.background.default,
-  },
-}));
-
-const SearchBar = styled(TextField)(({ theme }) => ({
-  marginBottom: theme.spacing(3),
-  '& .MuiOutlinedInput-root': {
-    borderRadius: theme.spacing(1),
-  },
-}));
-
-const NavigationDrawer = styled(Drawer)(({ theme }) => ({
-  width: 280,
-  flexShrink: 0,
-  '& .MuiDrawer-paper': {
-    width: 280,
-    boxSizing: 'border-box',
-    padding: theme.spacing(2),
-  },
-}));
-
-const NavigationControls = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: theme.spacing(2),
-}));
-
-const TableOfContents = styled(Box)(({ theme }) => ({
-  position: 'sticky',
-  top: theme.spacing(2),
-  maxHeight: 'calc(100vh - 100px)',
-  overflow: 'auto',
-  padding: theme.spacing(2),
-  backgroundColor: theme.palette.background.paper,
-  borderRadius: theme.spacing(1),
-  boxShadow: theme.shadows[1],
-}));
-
-const TocItem = styled(Box)<{ level: number }>(({ theme, level }) => ({
-  paddingLeft: theme.spacing(level * 2),
-  marginBottom: theme.spacing(1),
-  cursor: 'pointer',
-  '&:hover': {
-    color: theme.palette.primary.main,
-  },
-}));
-
-const ThemeToggle = styled(IconButton)(({ theme }) => ({
-  position: 'fixed',
-  bottom: theme.spacing(2),
-  right: theme.spacing(2),
-  backgroundColor: theme.palette.background.paper,
-  boxShadow: theme.shadows[2],
-  '&:hover': {
-    backgroundColor: theme.palette.action.hover,
-  },
-}));
-
-const ActionBar = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  gap: theme.spacing(1),
-  marginBottom: theme.spacing(2),
-  '& .MuiIconButton-root': {
-    backgroundColor: theme.palette.background.paper,
-    boxShadow: theme.shadows[1],
-    '&:hover': {
-      backgroundColor: theme.palette.action.hover,
-    },
-  },
-}));
+interface TocItem {
+  id: string;
+  title: string;
+  level: number;
+}
 
 interface DocumentationViewerProps {
   content: string;
   title: string;
   type: 'user-guide' | 'security' | 'api' | 'architecture';
-}
-
-interface TocItem {
-  id: string;
-  title: string;
-  level: number;
 }
 
 const DocumentationViewer: React.FC<DocumentationViewerProps> = ({
@@ -165,14 +54,15 @@ const DocumentationViewer: React.FC<DocumentationViewerProps> = ({
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentSection, setCurrentSection] = useState<string>('');
-  const contentRef = useRef<HTMLDivElement>(null);
+  const [currentSection, setCurrentSection] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [tocItems, setTocItems] = useState<TocItem[]>([]);
   const [showToc, setShowToc] = useState(true);
-  const [isPrintMode, setIsPrintMode] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  useEffect(() => {
+  const generateToc = useCallback(() => {
     if (contentRef.current) {
       const headings = contentRef.current.querySelectorAll('h1, h2, h3, h4, h5, h6');
       const items: TocItem[] = Array.from(headings).map((heading) => ({
@@ -181,92 +71,50 @@ const DocumentationViewer: React.FC<DocumentationViewerProps> = ({
         level: parseInt(heading.tagName[1]),
       }));
       setTocItems(items);
-
-      const observer = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              setCurrentSection(entry.target.id);
-            }
-          });
-        },
-        { threshold: 0.5 }
-      );
-
-      headings.forEach((heading) => observer.observe(heading));
-      return () => observer.disconnect();
     }
-  }, [content]);
+  }, []);
+
+  useEffect(() => {
+    generateToc();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setCurrentSection(entry.target.id);
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
+
+    if (contentRef.current) {
+      const headings = contentRef.current.querySelectorAll('h1, h2, h3, h4, h5, h6');
+      headings.forEach((heading) => observer.observe(heading));
+    }
+
+    return () => observer.disconnect();
+  }, [content, generateToc]);
 
   const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(event.target.value);
-    if (contentRef.current) {
+    if (contentRef.current && event.target.value) {
       const searchText = event.target.value.toLowerCase();
-      const content = contentRef.current.textContent?.toLowerCase() || '';
-      if (content.includes(searchText)) {
-        const index = content.indexOf(searchText);
-        contentRef.current.scrollTo({
-          top: index,
-          behavior: 'smooth',
-        });
+      const contentText = contentRef.current.textContent?.toLowerCase() || '';
+      if (contentText.includes(searchText)) {
+        const index = contentText.indexOf(searchText);
+        contentRef.current.scrollTo({ top: index, behavior: 'smooth' });
       }
     }
   };
 
-  const toggleDrawer = () => {
-    setIsDrawerOpen(!isDrawerOpen);
-  };
-
-  const getIcon = () => {
-    switch (type) {
-      case 'user-guide':
-        return <BookmarkIcon />;
-      case 'security':
-        return <SecurityIcon />;
-      case 'api':
-        return <CodeIcon />;
-      case 'architecture':
-        return <ArchitectureIcon />;
-      default:
-        return <BookmarkIcon />;
-    }
-  };
-
-  const navigationItems = [
-    {
-      title: 'Overview',
-      path: '#overview',
-    },
-    {
-      title: 'Getting Started',
-      path: '#getting-started',
-    },
-    {
-      title: 'Features',
-      path: '#features',
-    },
-    {
-      title: 'Best Practices',
-      path: '#best-practices',
-    },
-    {
-      title: 'Troubleshooting',
-      path: '#troubleshooting',
-    },
-  ];
-
-  const handleScrollToSection = (sectionId: string) => {
-    const element = document.getElementById(sectionId);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
-      if (isMobile) {
-        setIsDrawerOpen(false);
-      }
-    }
-  };
+  const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
   const handleTocClick = (id: string) => {
-    handleScrollToSection(id);
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+      if (isMobile) setIsDrawerOpen(false);
+    }
   };
 
   const toggleTheme = () => {
@@ -275,11 +123,7 @@ const DocumentationViewer: React.FC<DocumentationViewerProps> = ({
   };
 
   const handlePrint = () => {
-    setIsPrintMode(true);
-    setTimeout(() => {
-      window.print();
-      setIsPrintMode(false);
-    }, 100);
+    window.print();
   };
 
   const handleExportPdf = async () => {
@@ -287,200 +131,134 @@ const DocumentationViewer: React.FC<DocumentationViewerProps> = ({
       const { jsPDF } = await import('jspdf');
       const doc = new jsPDF();
       const content = document.querySelector('.markdown-content')?.textContent || '';
-      
       doc.setFontSize(12);
       doc.text(title, 20, 20);
       doc.setFontSize(10);
       doc.text(content, 20, 30, { maxWidth: 170 });
-      
       doc.save(`${title.toLowerCase().replace(/\s+/g, '-')}.pdf`);
     } catch (error) {
-      console.error('Failed to export PDF:', error);
+      setError('Failed to export PDF');
     }
   };
 
   const handleShare = async () => {
     try {
       await navigator.share({
-        title: title,
+        title,
         text: content.substring(0, 200) + '...',
         url: window.location.href,
       });
     } catch (error) {
-      console.error('Failed to share:', error);
+      setError('Failed to share content');
     }
   };
 
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const getIcon = () => {
+    switch (type) {
+      case 'user-guide': return <BookmarkIcon />;
+      case 'security': return <SecurityIcon />;
+      case 'api': return <CodeIcon />;
+      case 'architecture': return <ArchitectureIcon />;
+      default: return <BookmarkIcon />;
+    }
+  };
 
   return (
-    <Box sx={{ display: 'flex', height: '100%' }}>
+    <div className="flex h-screen">
       {isMobile && (
         <IconButton
           onClick={toggleDrawer}
-          sx={{ position: 'fixed', top: 16, left: 16, zIndex: 1200 }}
+          className="fixed top-4 left-4 z-50"
+          aria-label="Toggle navigation drawer"
         >
           <MenuIcon />
         </IconButton>
       )}
 
-      <NavigationDrawer
+      <Drawer
         variant={isMobile ? 'temporary' : 'permanent'}
         open={isMobile ? isDrawerOpen : true}
         onClose={toggleDrawer}
+        classes={{ paper: 'w-72 p-4' }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+        <div className="flex items-center mb-4">
           {getIcon()}
-          <Typography variant="h6" sx={{ ml: 1 }}>
-            {title}
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <IconButton onClick={() => setShowToc(!showToc)}>
+          <h2 className="ml-2 text-xl font-semibold">{title}</h2>
+        </div>
+        <div className="flex items-center mb-4">
+          <IconButton onClick={() => setShowToc(!showToc)} aria-label="Toggle table of contents">
             <TocIcon />
           </IconButton>
-          <Typography variant="subtitle2" sx={{ ml: 1 }}>
-            Table of Contents
-          </Typography>
-        </Box>
+          <span className="ml-2 text-sm">Table of Contents</span>
+        </div>
         {showToc && (
-          <TableOfContents>
+          <div className="sticky top-4 max-h-[calc(100vh-100px)] overflow-auto p-2 bg-gray-50 rounded-lg shadow-sm">
             {tocItems.map((item) => (
-              <TocItem
+              <div
                 key={item.id}
-                level={item.level}
+                className={`pl-${item.level * 2} mb-2 cursor-pointer hover:text-blue-500 ${currentSection === item.id ? 'text-blue-600 font-bold' : ''}`}
                 onClick={() => handleTocClick(item.id)}
-                sx={{
-                  color: currentSection === item.id ? 'primary.main' : 'text.primary',
-                  fontWeight: currentSection === item.id ? 'bold' : 'normal',
-                }}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && handleTocClick(item.id)}
               >
                 {item.title}
-              </TocItem>
+              </div>
             ))}
-          </TableOfContents>
+          </div>
         )}
-      </NavigationDrawer>
+      </Drawer>
 
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          p: 3,
-          width: { sm: `calc(100% - 280px)` },
-          ml: { sm: '280px' },
-          backgroundColor: isDarkMode ? '#121212' : '#ffffff',
-          color: isDarkMode ? '#ffffff' : '#000000',
-          '@media print': {
-            ml: 0,
-            width: '100%',
-            p: 0,
-          },
-        }}
-      >
-        <NavigationControls>
+      <main className={`flex-1 p-6 ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-white text-black'} sm:ml-72`}>
+        <div className="flex justify-between items-center mb-4">
           <Breadcrumbs separator={<NavigateNextIcon fontSize="small" />}>
-            <Link color="inherit" href="/admin">
-              Admin
-            </Link>
-            <Link color="inherit" href="/admin/help">
-              Help & Support
-            </Link>
-            <Typography color="text.primary">{title}</Typography>
+            <Link href="/admin" className="text-gray-500 hover:text-blue-500">Admin</Link>
+            <Link href="/admin/help" className="text-gray-500 hover:text-blue-500">Help & Support</Link>
+            <span>{title}</span>
           </Breadcrumbs>
-          <ActionBar>
+          <div className="flex gap-2">
             <Tooltip title="Print">
-              <IconButton onClick={handlePrint}>
+              <IconButton onClick={handlePrint} aria-label="Print documentation">
                 <PrintIcon />
               </IconButton>
             </Tooltip>
             <Tooltip title="Export as PDF">
-              <IconButton onClick={handleExportPdf}>
+              <IconButton onClick={handleExportPdf} aria-label="Export as PDF">
                 <PdfIcon />
               </IconButton>
             </Tooltip>
             <Tooltip title="Share">
-              <IconButton onClick={handleShare}>
+              <IconButton onClick={handleShare} aria-label="Share documentation">
                 <ShareIcon />
               </IconButton>
             </Tooltip>
-          </ActionBar>
-          <Box>
-            <Tooltip title="Previous Section">
-              <IconButton
-                onClick={() => {
-                  const currentIndex = navigationItems.findIndex(
-                    (item) => item.path.substring(1) === currentSection
-                  );
-                  if (currentIndex > 0) {
-                    handleScrollToSection(
-                      navigationItems[currentIndex - 1].path.substring(1)
-                    );
-                  }
-                }}
-              >
-                <NavigateBeforeIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Next Section">
-              <IconButton
-                onClick={() => {
-                  const currentIndex = navigationItems.findIndex(
-                    (item) => item.path.substring(1) === currentSection
-                  );
-                  if (currentIndex < navigationItems.length - 1) {
-                    handleScrollToSection(
-                      navigationItems[currentIndex + 1].path.substring(1)
-                    );
-                  }
-                }}
-              >
-                <NavigateNextIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        </NavigationControls>
+          </div>
+        </div>
 
-        <SearchBar
-          fullWidth
+        <input
+          type="text"
           placeholder="Search in documentation..."
           value={searchQuery}
           onChange={handleSearch}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
-          }}
+          className="w-full p-2 mb-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
 
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+          <div className="flex justify-center p-6">
             <CircularProgress />
-          </Box>
+          </div>
         ) : error ? (
           <Alert severity="error">{error}</Alert>
         ) : (
-          <StyledPaper
+          <div
             ref={contentRef}
-            sx={{
-              backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff',
-              color: isDarkMode ? '#ffffff' : '#000000',
-              '@media print': {
-                boxShadow: 'none',
-                backgroundColor: '#ffffff',
-                color: '#000000',
-              },
-            }}
-            className="markdown-content"
+            className={`p-6 rounded-lg shadow-sm ${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-black'}`}
           >
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeRaw, rehypeSanitize]}
               components={{
-                code({ node, inline, className, children, ...props }) {
+                code({ inline, className, children, ...props }) {
                   const match = /language-(\w+)/.exec(className || '');
                   return !inline && match ? (
                     <SyntaxHighlighter
@@ -504,79 +282,51 @@ const DocumentationViewer: React.FC<DocumentationViewerProps> = ({
                     </code>
                   );
                 },
-                h1: ({ node, ...props }) => (
-                  <Typography
-                    variant="h3"
-                    component="h1"
-                    id={props.children?.toString().toLowerCase().replace(/\s+/g, '-')}
-                    sx={{ mt: 4, mb: 2 }}
-                    {...props}
-                  />
+                h1: ({ children }) => (
+                  <h1 className="mt-8 mb-4 text-3xl font-bold" id={String(children).toLowerCase().replace(/\s+/g, '-')}>
+                    {children}
+                  </h1>
                 ),
-                h2: ({ node, ...props }) => (
-                  <Typography
-                    variant="h4"
-                    component="h2"
-                    id={props.children?.toString().toLowerCase().replace(/\s+/g, '-')}
-                    sx={{ mt: 3, mb: 2 }}
-                    {...props}
-                  />
+                h2: ({ children }) => (
+                  <h2 className="mt-6 mb-3 text-2xl font-semibold" id={String(children).toLowerCase().replace(/\s+/g, '-')}>
+                    {children}
+                  </h2>
                 ),
-                h3: ({ node, ...props }) => (
-                  <Typography
-                    variant="h5"
-                    component="h3"
-                    id={props.children?.toString().toLowerCase().replace(/\s+/g, '-')}
-                    sx={{ mt: 2, mb: 1 }}
-                    {...props}
-                  />
+                h3: ({ children }) => (
+                  <h3 className="mt-4 mb-2 text-xl font-medium" id={String(children).toLowerCase().replace(/\s+/g, '-')}>
+                    {children}
+                  </h3>
                 ),
-                p: ({ node, ...props }) => (
-                  <Typography
-                    variant="body1"
-                    sx={{
-                      color: isDarkMode ? '#e0e0e0' : '#000000',
-                      mb: 2,
-                    }}
-                    {...props}
-                  />
+                p: ({ children }) => (
+                  <p className={`mb-4 ${isDarkMode ? 'text-gray-300' : 'text-gray-800'}`}>
+                    {children}
+                  </p>
                 ),
-                a: ({ node, ...props }) => (
-                  <Link
-                    {...props}
-                    sx={{
-                      color: isDarkMode ? '#90caf9' : '#1976d2',
-                      '&:hover': {
-                        color: isDarkMode ? '#bbdefb' : '#1565c0',
-                      },
-                    }}
-                  />
+                a: ({ href, children }) => (
+                  <a href={href} className={isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-500'}>
+                    {children}
+                  </a>
                 ),
-                img: ({ node, ...props }) => (
-                  <img
-                    {...props}
-                    style={{
-                      maxWidth: '100%',
-                      height: 'auto',
-                      '@media print': {
-                        maxWidth: '500px',
-                      },
-                    }}
-                  />
+                img: ({ src, alt }) => (
+                  <img src={src} alt={alt} className="max-w-full h-auto rounded-lg" />
                 ),
               }}
             >
               {content}
             </ReactMarkdown>
-          </StyledPaper>
+          </div>
         )}
-      </Box>
+      </main>
 
-      <ThemeToggle onClick={toggleTheme} aria-label="toggle theme">
+      <IconButton
+        onClick={toggleTheme}
+        className="fixed bottom-4 right-4 bg-white shadow-md"
+        aria-label="Toggle theme"
+      >
         {isDarkMode ? <LightModeIcon /> : <DarkModeIcon />}
-      </ThemeToggle>
-    </Box>
+      </IconButton>
+    </div>
   );
 };
 
-export default DocumentationViewer; 
+export default DocumentationViewer;

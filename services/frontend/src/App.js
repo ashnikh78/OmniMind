@@ -4,7 +4,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, AuthContext } from './contexts/AuthContext';
 import { TenantProvider } from './contexts/TenantContext';
 import { RBACProvider } from './contexts/RBACContext';
 import { AnalyticsProvider } from './contexts/AnalyticsContext';
@@ -26,9 +26,12 @@ import MLService from './pages/MLService';
 import Tenants from './pages/Tenants';
 import Roles from './pages/Roles';
 import Analytics from './pages/Analytics';
+import CustomerService from './pages/CustomerService'; // NEW: Import CustomerService page
 import PrivateRoute from './components/PrivateRoute';
 import ProtectedRoute from './components/ProtectedRoute';
 import NotFound from './pages/NotFound';
+
+
 
 function App() {
   useEffect(() => {
@@ -39,7 +42,7 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
-        <TenantProvider>
+        <TenantProvider>  
           <RBACProvider>
             <AnalyticsProvider>
               <NotificationProvider>
@@ -77,6 +80,7 @@ function App() {
                           <Route path="roles" element={<PrivateRoute><Roles /></PrivateRoute>} />
                           <Route path="analytics" element={<PrivateRoute><Analytics /></PrivateRoute>} />
                           <Route path="ml-service" element={<PrivateRoute><MLService /></PrivateRoute>} />
+                          <Route path="customer-service" element={<PrivateRoute><CustomerService /></PrivateRoute>} /> {/* NEW: Customer service route */}
                           <Route path="*" element={<NotFound />} />
                         </Route>
                       </Routes>
@@ -92,4 +96,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;

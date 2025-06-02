@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   Box,
   AppBar,
@@ -31,29 +31,23 @@ import {
   Memory as MemoryIcon,
   Business as BusinessIcon,
   Security as SecurityIcon,
+  SupportAgent as SupportIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 
 const drawerWidth = 240;
 
-function Layout() {
+const Layout = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
 
-  const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
-  };
-
-  const handleProfileMenuOpen = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleProfileMenuClose = () => {
-    setAnchorEl(null);
-  };
+  const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
+  const handleProfileMenuOpen = (event) => setAnchorEl(event.currentTarget);
+  const handleProfileMenuClose = () => setAnchorEl(null);
 
   const handleLogout = async () => {
     try {
@@ -74,6 +68,7 @@ function Layout() {
     { text: 'Tenants', icon: <BusinessIcon />, path: '/tenants' },
     { text: 'Roles', icon: <SecurityIcon />, path: '/roles' },
     { text: 'Analytics', icon: <TimelineIcon />, path: '/analytics' },
+    { text: 'Customer Service', icon: <SupportIcon />, path: '/customer-service' },
   ];
 
   const drawer = (
@@ -86,9 +81,7 @@ function Layout() {
         />
         <Box>
           <Typography variant="subtitle1">{user?.username}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {user?.email}
-          </Typography>
+          <Typography variant="body2" color="text.secondary">{user?.email}</Typography>
         </Box>
       </Box>
       <Divider />
@@ -96,11 +89,10 @@ function Layout() {
         {menuItems.map((item) => (
           <ListItem key={item.text} disablePadding>
             <ListItemButton
+              component={Link}
+              to={item.path}
               selected={location.pathname === item.path}
-              onClick={() => {
-                navigate(item.path);
-                setMobileOpen(false);
-              }}
+              onClick={() => setMobileOpen(false)}
             >
               <ListItemIcon>{item.icon}</ListItemIcon>
               <ListItemText primary={item.text} />
@@ -129,38 +121,26 @@ function Layout() {
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
+          <Typography variant="h6" noWrap sx={{ flexGrow: 1 }}>
             OmniMind
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <Tooltip title="Messages">
-              <IconButton
-                color="inherit"
-                onClick={() => navigate('/messages')}
-                sx={{ mr: 1 }}
-              >
+              <IconButton color="inherit" onClick={() => navigate('/messages')} sx={{ mr: 1 }}>
                 <Badge badgeContent={4} color="error">
                   <MessageIcon />
                 </Badge>
               </IconButton>
             </Tooltip>
             <Tooltip title="Notifications">
-              <IconButton
-                color="inherit"
-                onClick={() => navigate('/notifications')}
-                sx={{ mr: 1 }}
-              >
+              <IconButton color="inherit" onClick={() => navigate('/notifications')} sx={{ mr: 1 }}>
                 <Badge badgeContent={3} color="error">
                   <NotificationsIcon />
                 </Badge>
               </IconButton>
             </Tooltip>
             <Tooltip title="Profile">
-              <IconButton
-                color="inherit"
-                onClick={handleProfileMenuOpen}
-                sx={{ ml: 1 }}
-              >
+              <IconButton color="inherit" onClick={handleProfileMenuOpen} sx={{ ml: 1 }}>
                 <Avatar
                   src={user?.avatar}
                   alt={user?.username}
@@ -172,23 +152,15 @@ function Layout() {
         </Toolbar>
       </AppBar>
 
-      <Box
-        component="nav"
-        sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
-      >
+      <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}>
         <Drawer
           variant="temporary"
           open={mobileOpen}
           onClose={handleDrawerToggle}
-          ModalProps={{
-            keepMounted: true, // Better open performance on mobile.
-          }}
+          ModalProps={{ keepMounted: true }}
           sx={{
             display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': {
-              boxSizing: 'border-box',
-              width: drawerWidth,
-            },
+            '& .MuiDrawer-paper': { width: drawerWidth, boxSizing: 'border-box' },
           }}
         >
           {drawer}
@@ -197,10 +169,7 @@ function Layout() {
           variant="permanent"
           sx={{
             display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer-paper': {
-              boxSizing: 'border-box',
-              width: drawerWidth,
-            },
+            '& .MuiDrawer-paper': { width: drawerWidth, boxSizing: 'border-box' },
           }}
           open
         >
@@ -210,14 +179,9 @@ function Layout() {
 
       <Box
         component="main"
-        sx={{
-          flexGrow: 1,
-          p: 3,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          mt: '64px',
-        }}
+        sx={{ flexGrow: 1, p: 3, width: { sm: `calc(100% - ${drawerWidth}px)` }, mt: '64px' }}
       >
-        <Outlet />
+        {children || <Outlet />}
       </Box>
 
       <Menu
@@ -229,27 +193,21 @@ function Layout() {
         anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
       >
         <MenuItem onClick={() => navigate('/profile')}>
-          <ListItemIcon>
-            <PersonIcon fontSize="small" />
-          </ListItemIcon>
+          <ListItemIcon><PersonIcon fontSize="small" /></ListItemIcon>
           <ListItemText>Profile</ListItemText>
         </MenuItem>
         <MenuItem onClick={() => navigate('/settings')}>
-          <ListItemIcon>
-            <SettingsIcon fontSize="small" />
-          </ListItemIcon>
+          <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
           <ListItemText>Settings</ListItemText>
         </MenuItem>
         <Divider />
         <MenuItem onClick={handleLogout}>
-          <ListItemIcon>
-            <LogoutIcon fontSize="small" />
-          </ListItemIcon>
+          <ListItemIcon><LogoutIcon fontSize="small" /></ListItemIcon>
           <ListItemText>Logout</ListItemText>
         </MenuItem>
       </Menu>
     </Box>
   );
-}
+};
 
-export default Layout; 
+export default Layout;

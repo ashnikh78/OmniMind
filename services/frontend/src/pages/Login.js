@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Paper,
@@ -23,6 +23,7 @@ function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -31,13 +32,8 @@ function Login() {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  useEffect(() => {
-    console.log('Login component mounted');
-  }, []);
-
   const handleChange = (e) => {
     const { name, value } = e.target;
-    console.log('Form field changed:', name, value);
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -46,18 +42,14 @@ function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Form submitted with data:', formData);
     setError('');
     setLoading(true);
 
     try {
-      console.log('Attempting login...');
       await login(formData);
-      console.log('Login successful');
       const from = location.state?.from?.pathname || '/dashboard';
       navigate(from, { replace: true });
     } catch (error) {
-      console.error('Login error:', error);
       setError(error.response?.data?.detail || 'Failed to login');
     } finally {
       setLoading(false);
@@ -126,10 +118,7 @@ function Login() {
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
-                  <IconButton
-                    onClick={handleTogglePasswordVisibility}
-                    edge="end"
-                  >
+                  <IconButton onClick={handleTogglePasswordVisibility} edge="end">
                     {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
                   </IconButton>
                 </InputAdornment>
@@ -146,6 +135,7 @@ function Login() {
           >
             {loading ? <CircularProgress size={24} /> : 'Sign In'}
           </Button>
+
           <Box sx={{ textAlign: 'center' }}>
             <Link
               component="button"
@@ -170,4 +160,4 @@ function Login() {
   );
 }
 
-export default Login; 
+export default Login;

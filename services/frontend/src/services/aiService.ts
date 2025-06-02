@@ -231,6 +231,7 @@ interface MemoryEntry {
 
 export class AIService {
   private baseUrl: string;
+  private apiUrl: string;
   private apiKey: string;
   private memorySystem!: EnhancedMemorySystem;
   private contextWindow: number;
@@ -243,6 +244,7 @@ export class AIService {
 
   constructor(baseUrl: string, apiKey: string) {
     this.baseUrl = baseUrl;
+    this.apiUrl = `${baseUrl}/api`;
     this.apiKey = apiKey;
     this.contextWindow = 4000;
     this.maxMemoryItems = 1000;
@@ -1142,8 +1144,20 @@ Please provide a response that:
       ];
     }
   }
-}
+   async shareConversation(conversationId: string): Promise<void> {
+    const response = await fetch(`${this.apiUrl}/conversations/${conversationId}/share`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`,
+      },
+    });
 
+    if (!response.ok) {
+      throw new Error('Failed to share conversation');
+    }
+  }
+}
 // Create and export an instance of AIService
 export const aiService = new AIService(
   process.env.REACT_APP_API_URL || 'http://localhost:8000',

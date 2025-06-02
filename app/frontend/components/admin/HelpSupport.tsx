@@ -1,117 +1,50 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Box,
   Container,
-  Typography,
-  Paper,
-  Tabs,
-  Tab,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Divider,
   Breadcrumbs,
   Link,
-  useTheme,
   CircularProgress,
   Alert,
   Snackbar,
-  Button,
-  Tooltip,
   IconButton,
+  Tooltip,
 } from '@mui/material';
 import {
   Book as BookIcon,
   Security as SecurityIcon,
   Api as ApiIcon,
   Architecture as ArchitectureIcon,
-  Help as HelpIcon,
-  Search as SearchIcon,
-  Bookmark as BookmarkIcon,
-  Share as ShareIcon,
   Print as PrintIcon,
   Download as DownloadIcon,
+  Share as ShareIcon,
 } from '@mui/icons-material';
-import { styled } from '@mui/material/styles';
-import { documentationService, DocumentationSection } from '../../services/documentationService';
+import { debounce } from 'lodash';
 import DocumentationViewer from './DocumentationViewer';
 
-// Styled components
-const StyledPaper = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(3),
-  marginBottom: theme.spacing(3),
-  borderRadius: theme.spacing(1),
-  boxShadow: theme.shadows[2],
-}));
-
-const StyledTabs = styled(Tabs)(({ theme }) => ({
-  borderBottom: `1px solid ${theme.palette.divider}`,
-  marginBottom: theme.spacing(3),
-}));
-
-const StyledTab = styled(Tab)(({ theme }) => ({
-  textTransform: 'none',
-  minWidth: 0,
-  marginRight: theme.spacing(4),
-}));
-
-const DocumentationContent = styled(Box)(({ theme }) => ({
-  padding: theme.spacing(2),
-  '& h1': {
-    marginBottom: theme.spacing(3),
-  },
-  '& h2': {
-    marginTop: theme.spacing(4),
-    marginBottom: theme.spacing(2),
-  },
-  '& h3': {
-    marginTop: theme.spacing(3),
-    marginBottom: theme.spacing(1),
-  },
-  '& ul, & ol': {
-    paddingLeft: theme.spacing(4),
-  },
-  '& li': {
-    marginBottom: theme.spacing(1),
-  },
-}));
-
-const ActionBar = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  justifyContent: 'flex-end',
-  gap: theme.spacing(2),
-  marginBottom: theme.spacing(2),
-}));
-
-const LoadingContainer = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  justifyContent: 'center',
-  alignItems: 'center',
-  minHeight: '200px',
-}));
-
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
+interface DocumentationSection {
+  id: string;
+  title: string;
+  type: 'user-guide' | 'security' | 'api' | 'architecture';
+  content: string;
 }
 
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`doc-tabpanel-${index}`}
-      aria-labelledby={`doc-tab-${index}`}
-      {...other}
-    >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
-    </div>
-  );
-}
+const documentationService = {
+  getDocumentationSections: async (): Promise<DocumentationSection[]> => {
+    // Mock implementation; replace with actual API call
+    return [
+      { id: '1', title: 'User Guide Overview', type: 'user-guide', content: '' },
+      { id: '2', title: 'Security Policies', type: 'security', content: '' },
+    ];
+  },
+  getDocumentationContent: async (id: string): Promise<string> => {
+    // Mock implementation; replace with actual API call
+    return '# Sample Content';
+  },
+  searchDocumentation: async (query: string): Promise<DocumentationSection[]> => {
+    // Mock implementation; replace with actual API call
+    return [];
+  },
+};
 
 const HelpSupport: React.FC = () => {
   const [selectedTab, setSelectedTab] = useState(0);
@@ -119,15 +52,9 @@ const HelpSupport: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedSection, setSelectedSection] = useState<DocumentationSection | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const [showNotification, setShowNotification] = useState(false);
-  const theme = useTheme();
 
-  useEffect(() => {
-    loadDocumentation();
-  }, []);
-
-  const loadDocumentation = async () => {
+  const loadDocumentation = useCallback(async () => {
     try {
       setLoading(true);
       const data = await documentationService.getDocumentationSections();
@@ -138,9 +65,29 @@ const HelpSupport: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const debouncedSearch = useCallback(
+    debounce(async (query: string) => {
+      if (query.length < 2) return;
+      try {
+        setLoading(true);
+        const results = await documentationService.searchDocumentation(query);
+        setSections(results);
+      } catch (err) {
+        setError('Search failed. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    }, 300),
+    []
+  );
+
+  useEffect(() => {
+    loadDocumentation();
+  }, [loadDocumentation]);
+
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setSelectedTab(newValue);
     setSelectedSection(null);
   };
@@ -157,24 +104,11 @@ const HelpSupport: React.FC = () => {
     }
   };
 
-  const handleSearch = async (query: string) => {
-    if (query.length < 2) return;
-    try {
-      setLoading(true);
-      const results = await documentationService.searchDocumentation(query);
-      setSections(results);
-    } catch (err) {
-      setError('Search failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handlePrint = () => {
     window.print();
   };
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
     if (!selectedSection) return;
     const blob = new Blob([selectedSection.content], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
@@ -201,131 +135,111 @@ const HelpSupport: React.FC = () => {
   };
 
   const documentationSections = [
-    {
-      title: 'User Guide',
-      icon: <HelpIcon />,
-      content: 'user-guide',
-    },
-    {
-      title: 'Security',
-      icon: <SecurityIcon />,
-      content: 'security',
-    },
-    {
-      title: 'API Reference',
-      icon: <ApiIcon />,
-      content: 'api',
-    },
-    {
-      title: 'Architecture',
-      icon: <ArchitectureIcon />,
-      content: 'architecture',
-    },
+    { title: 'User Guide', icon: <BookIcon />, content: 'user-guide' },
+    { title: 'Security', icon: <SecurityIcon />, content: 'security' },
+    { title: 'API Reference', icon: <ApiIcon />, content: 'api' },
+    { title: 'Architecture', icon: <ArchitectureIcon />, content: 'architecture' },
   ];
 
   if (loading) {
     return (
-      <LoadingContainer>
+      <div className="flex justify-center items-center min-h-[200px]">
         <CircularProgress />
-      </LoadingContainer>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <div className="max-w-7xl mx-auto mt-8 mb-8">
         <Alert severity="error">{error}</Alert>
-      </Container>
+      </div>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Breadcrumbs sx={{ mb: 3 }}>
-        <Link color="inherit" href="/admin">
-          Admin
-        </Link>
-        <Typography color="text.primary">Help & Support</Typography>
+    <div className="max-w-7xl mx-auto mt-8 mb-8">
+      <Breadcrumbs className="mb-6">
+        <Link href="/admin" className="text-gray-500 hover:text-blue-500">Admin</Link>
+        <span>Help & Support</span>
       </Breadcrumbs>
 
-      <Typography variant="h4" component="h1" gutterBottom>
-        Help & Support Documentation
-      </Typography>
+      <h1 className="text-3xl font-bold mb-6">Help & Support Documentation</h1>
 
-      <StyledPaper>
-        <ActionBar>
+      <div className="p-6 bg-white rounded-lg shadow-md">
+        <div className="flex justify-end gap-4 mb-4">
           <Tooltip title="Print Documentation">
-            <IconButton onClick={handlePrint}>
+            <IconButton onClick={handlePrint} aria-label="Print documentation">
               <PrintIcon />
             </IconButton>
           </Tooltip>
           <Tooltip title="Download as Markdown">
-            <IconButton onClick={handleDownload} disabled={!selectedSection}>
+            <IconButton onClick={handleDownload} disabled={!selectedSection} aria-label="Download documentation">
               <DownloadIcon />
             </IconButton>
           </Tooltip>
           <Tooltip title="Share Documentation">
-            <IconButton onClick={handleShare} disabled={!selectedSection}>
+            <IconButton onClick={handleShare} disabled={!selectedSection} aria-label="Share documentation">
               <ShareIcon />
             </IconButton>
           </Tooltip>
-        </ActionBar>
+        </div>
 
-        <StyledTabs
-          value={selectedTab}
-          onChange={handleTabChange}
-          aria-label="documentation tabs"
-        >
+        <div className="flex border-b mb-6">
           {documentationSections.map((section, index) => (
-            <StyledTab
+            <button
               key={section.title}
-              icon={section.icon}
-              label={section.title}
-              id={`doc-tab-${index}`}
-              aria-controls={`doc-tabpanel-${index}`}
-            />
+              onClick={() => handleTabChange({} as any, index)}
+              className={`flex items-center px-4 py-2 mr-4 ${selectedTab === index ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-600'}`}
+              aria-selected={selectedTab === index}
+              role="tab"
+            >
+              {section.icon}
+              <span className="ml-2">{section.title}</span>
+            </button>
           ))}
-        </StyledTabs>
+        </div>
 
         {selectedSection ? (
           <DocumentationViewer
             content={selectedSection.content}
             title={selectedSection.title}
-            type={selectedSection.type as any}
+            type={selectedSection.type}
           />
         ) : (
           documentationSections.map((section, index) => (
-            <TabPanel key={section.title} value={selectedTab} index={index}>
-              <DocumentationContent>
-                <Typography variant="h5" gutterBottom>
-                  {section.title}
-                </Typography>
-                <List>
-                  {sections
-                    .filter((s) => s.type === section.content)
-                    .map((docSection) => (
-                      <React.Fragment key={docSection.id}>
-                        <ListItem
-                          button
+            <div key={section.title} role="tabpanel" hidden={selectedTab !== index}>
+              {selectedTab === index && (
+                <div className="p-4">
+                  <h2 className="text-2xl font-semibold mb-4">{section.title}</h2>
+                  <ul className="space-y-2">
+                    {sections
+                      .filter((s) => s.type === section.content)
+                      .map((docSection) => (
+                        <li
+                          key={docSection.id}
+                          className="flex items-center p-2 hover:bg-gray-100 rounded cursor-pointer"
                           onClick={() => handleSectionClick(docSection)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => e.key === 'Enter' && handleSectionClick(docSection)}
                         >
-                          <ListItemIcon>
-                            {section.icon}
-                          </ListItemIcon>
-                          <ListItemText
-                            primary={docSection.title}
-                            secondary={`Click to view ${docSection.title.toLowerCase()} documentation`}
-                          />
-                        </ListItem>
-                        <Divider />
-                      </React.Fragment>
-                    ))}
-                </List>
-              </DocumentationContent>
-            </TabPanel>
+                          {section.icon}
+                          <div className="ml-4">
+                            <h3 className="text-lg font-medium">{docSection.title}</h3>
+                            <p className="text-sm text-gray-500">
+                              Click to view {docSection.title.toLowerCase()} documentation
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              )}
+            </div>
           ))
         )}
-      </StyledPaper>
+      </div>
 
       <Snackbar
         open={showNotification}
@@ -333,8 +247,8 @@ const HelpSupport: React.FC = () => {
         onClose={() => setShowNotification(false)}
         message="Sharing is not supported on this device"
       />
-    </Container>
+    </div>
   );
 };
 
-export default HelpSupport; 
+export default HelpSupport;

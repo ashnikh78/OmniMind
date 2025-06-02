@@ -13,6 +13,7 @@ import {
   CircularProgress,
   Alert,
   Chip,
+  TextField,
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
@@ -23,6 +24,7 @@ function Roles() {
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [newRole, setNewRole] = useState({ name: '', permissions: [] });
 
   useEffect(() => {
     fetchRoles();
@@ -42,6 +44,32 @@ function Roles() {
     }
   };
 
+  const handleAddRole = async () => {
+    try {
+      const response = await api.post('/api/v1/rbac/roles', newRole);
+      setRoles([...roles, response.data]);
+      setNewRole({ name: '', permissions: [] });
+    } catch (err) {
+      console.error('Failed to add role:', err);
+      setError('Failed to add role');
+    }
+  };
+
+  const handleEdit = (role) => {
+    console.log('Edit role:', role);
+    // Implement edit modal or inline editing
+  };
+
+  const handleDelete = async (roleId) => {
+    try {
+      await api.delete(`/api/v1/rbac/roles/${roleId}`);
+      setRoles(roles.filter((r) => r.id !== roleId));
+    } catch (err) {
+      console.error('Failed to delete role:', err);
+      setError('Failed to delete role');
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
@@ -57,7 +85,7 @@ function Roles() {
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => {/* TODO: Implement add role */}}
+          onClick={handleAddRole}
         >
           Add Role
         </Button>
@@ -68,6 +96,32 @@ function Roles() {
           {error}
         </Alert>
       )}
+
+      <Box sx={{ mt: 3, mb: 3 }}>
+        <Typography variant="h6">Add New Role</Typography>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 1 }}>
+          <TextField
+            label="Role Name"
+            value={newRole.name}
+            onChange={(e) =>
+              setNewRole({ ...newRole, name: e.target.value })
+            }
+          />
+          <TextField
+            label="Permissions (comma separated)"
+            value={newRole.permissions.join(', ')}
+            onChange={(e) =>
+              setNewRole({
+                ...newRole,
+                permissions: e.target.value
+                  .split(',')
+                  .map((p) => p.trim())
+                  .filter(Boolean),
+              })
+            }
+          />
+        </Box>
+      </Box>
 
       <TableContainer component={Paper}>
         <Table>
@@ -97,14 +151,14 @@ function Roles() {
                 <TableCell>
                   <Button
                     size="small"
-                    onClick={() => {/* TODO: Implement edit role */}}
+                    onClick={() => handleEdit(role)}
                   >
                     Edit
                   </Button>
                   <Button
                     size="small"
                     color="error"
-                    onClick={() => {/* TODO: Implement delete role */}}
+                    onClick={() => handleDelete(role.id)}
                   >
                     Delete
                   </Button>
@@ -118,4 +172,4 @@ function Roles() {
   );
 }
 
-export default Roles; 
+export default Roles;

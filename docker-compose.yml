@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.9"
 
 services:
   frontend:
@@ -9,8 +9,8 @@ services:
       - "80:80"
     environment:
       - NODE_ENV=development
-      - REACT_APP_API_URL=http://localhost:8000
-      - REACT_APP_METRICS_URL=http://localhost:9090
+      - REACT_APP_API_URL=http://api:8000
+      - REACT_APP_METRICS_URL=http://prometheus:9090
     volumes:
       - ./services/frontend:/app
       - /app/node_modules
@@ -19,18 +19,10 @@ services:
     networks:
       - app_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
 
   api:
     build:
@@ -40,6 +32,7 @@ services:
       - "8000:8000"
     environment:
       - ENVIRONMENT=development
+      - PYTHONUNBUFFERED=1
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/omnimind
       - REDIS_URL=redis://:redis@redis:6379/0
       - REDIS_PASSWORD=redis
@@ -60,14 +53,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 2G
-        reservations:
-          cpus: '1'
-          memory: 1G
 
   db:
     image: postgres:14
@@ -86,14 +71,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 2G
-        reservations:
-          cpus: '1'
-          memory: 1G
 
   redis:
     image: redis:7
@@ -109,17 +86,19 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    networks:
+      - app_network
+    # Add volume if models need to persist
+    # volumes:
+    #   - ollama_data:/root/.ollama
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus
     volumes:
       - ./prometheus:/etc/prometheus
       - prometheus_data:/prometheus
@@ -132,14 +111,9 @@ services:
       - "9090:9090"
     networks:
       - monitoring_network
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - grafana_data:/var/lib/grafana
@@ -147,16 +121,11 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
     ports:
-      - "3000:3000"
-    networks:
-      - monitoring_network
+      - "3001:3000"
     depends_on:
       - prometheus
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    networks:
+      - monitoring_network
 
   node-exporter:
     image: prom/node-exporter:latest
@@ -172,11 +141,6 @@ services:
       - "9100:9100"
     networks:
       - monitoring_network
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9100/metrics"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
@@ -190,11 +154,6 @@ services:
       - "8080:8080"
     networks:
       - monitoring_network
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/healthz"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   loki:
     image: grafana/loki:3.0.0
@@ -210,11 +169,6 @@ services:
       - LOKI_AUTH_ENABLED=false
     networks:
       - monitoring_network
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3100/ready"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
     user: "10001:10001"
 
   promtail:
@@ -224,15 +178,10 @@ services:
       - /var/log:/var/log
       - /var/run/docker.sock:/var/run/docker.sock
     command: -config.file=/etc/promtail/config.yml
-    networks:
-      - monitoring_network
     depends_on:
       - loki
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9080/ready"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    networks:
+      - monitoring_network
 
 volumes:
   postgres_data:
@@ -247,4 +196,4 @@ networks:
   app_network:
     driver: bridge
   monitoring_network:
-    driver: bridge 
+    driver: bridge

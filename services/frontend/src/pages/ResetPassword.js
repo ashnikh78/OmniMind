@@ -16,12 +16,16 @@ import {
   VisibilityOff as VisibilityOffIcon,
 } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext'; // Custom hook
+
+// ✅ Optionally import resetPassword directly if not provided by context
+// import { authAPI } from '../api'; 
 
 function ResetPassword() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { resetPassword } = useAuth();
+
+  const { resetPassword } = useAuth() || {}; // Use fallback
   const [formData, setFormData] = useState({
     password: '',
     confirmPassword: '',
@@ -60,13 +64,24 @@ function ResetPassword() {
         throw new Error('Invalid or missing reset token');
       }
 
-      await resetPassword(token, formData.password);
+      if (resetPassword) {
+        await resetPassword(token, formData.password);
+      } else {
+        throw new Error('resetPassword function not available');
+        // Optionally: await authAPI.resetPassword(token, formData.password);
+      }
+
       setSuccess('Password has been reset successfully');
       setTimeout(() => {
         navigate('/login');
       }, 2000);
     } catch (error) {
-      setError(error.response?.data?.detail || 'Failed to reset password');
+      console.error('Reset failed:', error);
+      setError(
+        error.response?.data?.detail ||
+        error.message ||
+        'Failed to reset password'
+      );
     } finally {
       setLoading(false);
     }
@@ -202,4 +217,4 @@ function ResetPassword() {
   );
 }
 
-export default ResetPassword; 
+export default ResetPassword;

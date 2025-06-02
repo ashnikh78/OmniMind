@@ -1,41 +1,55 @@
-import React from "react";
+import React from 'react';
 
-/**
- * PersonaSelector component
- * @param {Object[]} personas - Array of persona objects: { id, name, avatar, description }
- * @param {Object} selectedPersona - The currently selected persona object
- * @param {Function} onSelect - Callback when a persona is selected
- */
-export default function PersonaSelector({ personas, selectedPersona, onSelect }) {
+interface Persona {
+  id: string;
+  name: string;
+  avatar: string;
+  prompt: string;
+  description?: string;
+}
+
+interface PersonaSelectorProps {
+  personas: Persona[];
+  selectedPersona: Persona | null;
+  onSelect: (persona: Persona) => void;
+}
+
+const PersonaSelector: React.FC<PersonaSelectorProps> = ({ personas, selectedPersona, onSelect }) => {
   return (
-    <div style={{ marginBottom: 16 }}>
-      <label htmlFor="persona-select" style={{ marginRight: 8 }}>
+    <div className="mb-4">
+      <label htmlFor="persona-select" className="mr-2 text-sm font-medium">
         Persona:
       </label>
       <select
         id="persona-select"
-        value={selectedPersona?.id || ""}
-        onChange={e => {
-          const persona = personas.find(p => p.id === e.target.value);
-          onSelect(persona);
+        value={selectedPersona?.id || ''}
+        onChange={(e) => {
+          const persona = personas.find((p) => p.id === e.target.value);
+          if (persona) onSelect(persona);
         }}
+        className="p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        aria-label="Select persona"
       >
-        <option value="">Select Persona</option>
-        {personas.map(p => (
+        <option value="" disabled>
+          Select Persona
+        </option>
+        {personas.map((p) => (
           <option key={p.id} value={p.id}>
-            {p.avatar ? `${p.avatar} ` : ""}{p.name}
+            {p.avatar ? `${p.avatar} ` : ''}{p.name}
           </option>
         ))}
       </select>
       {selectedPersona && (
-        <div style={{ marginTop: 8, fontSize: 14, color: "#555" }}>
-          {selectedPersona.avatar && <span style={{ fontSize: 18 }}>{selectedPersona.avatar}</span>}{" "}
-          <b>{selectedPersona.name}</b>
+        <div className="mt-2 text-sm text-gray-600">
+          <span className="text-lg mr-2">{selectedPersona.avatar}</span>
+          <span className="font-semibold">{selectedPersona.name}</span>
           {selectedPersona.description && (
-            <span style={{ marginLeft: 8 }}>{selectedPersona.description}</span>
+            <span className="ml-2">{selectedPersona.description}</span>
           )}
         </div>
       )}
     </div>
   );
-}
+};
+
+export default PersonaSelector;

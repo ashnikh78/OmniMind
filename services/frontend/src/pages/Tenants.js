@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { tenantAPI } from '../services/api';
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import {
   Box,
   Typography,
@@ -12,6 +15,7 @@ import {
   Button,
   CircularProgress,
   Alert,
+  TextField
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
@@ -22,6 +26,7 @@ function Tenants() {
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [newTenant, setNewTenant] = useState({ name: '' });
 
   useEffect(() => {
     fetchTenants();
@@ -41,6 +46,37 @@ function Tenants() {
     }
   };
 
+  const handleAddTenant = async () => {
+    try {
+      const response = await tenantAPI.createTenant(newTenant);
+      setTenants(prev => [...prev, response.data]);
+      setNewTenant({ name: '' });
+      toast.success('Tenant added successfully');
+    } catch (error) {
+      setError('Failed to add tenant');
+      console.error('Error adding tenant:', error);
+    }
+  };
+
+  const handleEdit = (tenant) => {
+    // Placeholder logic for editing a tenant
+    console.log('Editing tenant:', tenant);
+    toast.info(`Edit tenant feature coming soon for ${tenant.name}`);
+  };
+
+  const handleDelete = async (tenantId) => {
+    if (!window.confirm('Are you sure you want to delete this tenant?')) return;
+
+    try {
+      await tenantAPI.deleteTenant(tenantId);
+      setTenants(prev => prev.filter(t => t.id !== tenantId));
+      toast.success('Tenant deleted successfully');
+    } catch (error) {
+      console.error('Error deleting tenant:', error);
+      toast.error('Failed to delete tenant');
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
@@ -53,13 +89,21 @@ function Tenants() {
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
         <Typography variant="h4">Tenants</Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => {/* TODO: Implement add tenant */}}
-        >
-          Add Tenant
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <TextField
+            size="small"
+            label="Tenant Name"
+            value={newTenant.name}
+            onChange={(e) => setNewTenant({ name: e.target.value })}
+          />
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleAddTenant}
+          >
+            Add Tenant
+          </Button>
+        </Box>
       </Box>
 
       {error && (
@@ -87,14 +131,14 @@ function Tenants() {
                 <TableCell>
                   <Button
                     size="small"
-                    onClick={() => {/* TODO: Implement edit tenant */}}
+                    onClick={() => handleEdit(tenant)}
                   >
                     Edit
                   </Button>
                   <Button
                     size="small"
                     color="error"
-                    onClick={() => {/* TODO: Implement delete tenant */}}
+                    onClick={() => handleDelete(tenant.id)}
                   >
                     Delete
                   </Button>
@@ -108,4 +152,4 @@ function Tenants() {
   );
 }
 
-export default Tenants; 
+export default Tenants;
