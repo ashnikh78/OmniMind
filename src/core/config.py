@@ -1,7 +1,12 @@
 from typing import Optional, List, Dict
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, SecretStr, HttpUrl
+import os
+import logging
 
+# Configure logging for debugging
+logging.basicConfig(level=logging.DEBUG)  # Set to DEBUG for more details
+logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     """Application settings."""
@@ -9,15 +14,15 @@ class Settings(BaseSettings):
     # Application
     APP_NAME: str = "OmniMind"
     APP_VERSION: str = "0.1.0"
-    DEBUG: bool = False
+    DEBUG: bool = True
     ENVIRONMENT: str = "development"
     
     # API
     API_V1_PREFIX: str = "/api/v1"
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
-    API_RATE_LIMIT: int = 100  # requests per minute
-    API_TIMEOUT: int = 30  # seconds
+    API_RATE_LIMIT: int = 100
+    API_TIMEOUT: int = 30
     
     # Security
     SECRET_KEY: SecretStr = Field(default_factory=lambda: SecretStr("your-secret-key"))
@@ -30,7 +35,7 @@ class Settings(BaseSettings):
     SSL_KEY_PATH: Optional[str] = None
     
     # Authentication
-    AUTH_PROVIDERS: List[str] = ["local", "oauth2", "saml"]
+    AUTH_PROVIDERS: List[str] = ["local"]
     OAUTH2_PROVIDERS: Dict[str, Dict[str, str]] = {
         "google": {
             "client_id": "",
@@ -51,31 +56,31 @@ class Settings(BaseSettings):
     SAML2_ENTITY_ID: str = "https://omnimind.example.com/saml2"
     
     # Database
-    POSTGRES_USER: str = "omnimind"
-    POSTGRES_PASSWORD: SecretStr = Field(default_factory=lambda: SecretStr("omnimind"))
-    POSTGRES_HOST: str = "localhost"
-    POSTGRES_PORT: int = 5432
-    POSTGRES_DB: str = "omnimind"
+    POSTGRES_USER: Optional[str] = "omnimind"
+    POSTGRES_PASSWORD: Optional[SecretStr] = Field(default_factory=lambda: SecretStr("omnimind"))
+    POSTGRES_HOST: Optional[str] = "localhost"
+    POSTGRES_PORT: Optional[int] = 5432
+    POSTGRES_DB: Optional[str] = "omnimind"
     DATABASE_URL: Optional[str] = None
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 10
     DATABASE_ECHO: bool = False
     
     # Redis
-    REDIS_HOST: str = "localhost"
-    REDIS_PORT: int = 6379
+    REDIS_HOST: Optional[str] = "localhost"
+    REDIS_PORT: Optional[int] = 6379
     REDIS_PASSWORD: Optional[SecretStr] = None
     REDIS_URL: Optional[str] = None
     REDIS_SSL: bool = False
     REDIS_CLUSTER_MODE: bool = False
     
     # ML Service
-    ML_SERVICE_URL: str = "http://ml:8000"
-    OLLAMA_HOST: str = "http://ollama:11434"
+    ML_SERVICE_URL: Optional[str] = "http://ml:8000"
+    OLLAMA_HOST: Optional[str] = "http://ollama:11434"
     USE_GPU: bool = False
     MODEL_CACHE_SIZE: int = 1000
-    MODEL_CACHE_TTL: int = 3600  # seconds
-    MODEL_QUOTA_PER_USER: int = 1000  # requests per day
+    MODEL_CACHE_TTL: int = 3600
+    MODEL_QUOTA_PER_USER: int = 1000
     
     # Monitoring
     PROMETHEUS_MULTIPROC_DIR: str = "/tmp"
@@ -85,26 +90,26 @@ class Settings(BaseSettings):
     NEW_RELIC_LICENSE_KEY: Optional[str] = None
     
     # Storage
-    STORAGE_TYPE: str = "local"  # local, s3, gcs, azure
+    STORAGE_TYPE: str = "local"
     STORAGE_BUCKET: Optional[str] = None
     STORAGE_REGION: Optional[str] = None
     STORAGE_ENCRYPTION_KEY: Optional[SecretStr] = None
     STORAGE_RETENTION_DAYS: int = 90
     
     # Celery
-    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
-    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
+    CELERY_BROKER_URL: Optional[str] = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: Optional[str] = "redis://localhost:6379/0"
     CELERY_TASK_TIME_LIMIT: int = 3600
     CELERY_TASK_SOFT_TIME_LIMIT: int = 3000
     CELERY_WORKER_CONCURRENCY: int = 4
     
     # Email
-    SMTP_HOST: str = "smtp.gmail.com"
-    SMTP_PORT: int = 587
-    SMTP_USER: str = ""
-    SMTP_PASSWORD: SecretStr = Field(default_factory=lambda: SecretStr(""))
+    SMTP_HOST: Optional[str] = "smtp.gmail.com"
+    SMTP_PORT: Optional[int] = 587
+    SMTP_USER: Optional[str] = ""
+    SMTP_PASSWORD: Optional[SecretStr] = Field(default_factory=lambda: SecretStr(""))
     SMTP_TLS: bool = True
-    EMAIL_FROM: str = "noreply@omnimind.example.com"
+    EMAIL_FROM: Optional[str] = "noreply@omnimind.example.com"
     
     # Billing
     STRIPE_SECRET_KEY: Optional[SecretStr] = None
@@ -125,23 +130,30 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,
+        extra="ignore"  # Ignore undefined environment variables
     )
     
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        logger.debug("Environment variables: %s", {k: v if "PASSWORD" not in k and "KEY" not in k else "****" for k, v in os.environ.items()})
+        try:
+            super().__init__(**kwargs)
+        except Exception as e:
+            logger.error("Settings validation error: %s", e)
+            raise
         
-        # Construct database URL if not provided
-        if not self.DATABASE_URL:
+        if not self.DATABASE_URL and all([self.POSTGRES_USER, self.POSTGRES_PASSWORD, self.POSTGRES_HOST, self.POSTGRES_PORT, self.POSTGRES_DB]):
             self.DATABASE_URL = (
                 f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD.get_secret_value()}"
                 f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
             )
         
-        # Construct Redis URL if not provided
-        if not self.REDIS_URL:
+        if not self.REDIS_URL and self.REDIS_HOST and self.REDIS_PORT:
             auth = f":{self.REDIS_PASSWORD.get_secret_value()}@" if self.REDIS_PASSWORD else ""
             protocol = "rediss" if self.REDIS_SSL else "redis"
             self.REDIS_URL = f"{protocol}://{auth}{self.REDIS_HOST}:{self.REDIS_PORT}/0"
 
-
-settings = Settings() 
+try:
+    settings = Settings()
+except Exception as e:
+    logger.error("Failed to initialize settings: %s", e)
+    raise

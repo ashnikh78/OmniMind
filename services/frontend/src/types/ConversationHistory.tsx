@@ -1,27 +1,22 @@
+// src/components/ConversationHistory.tsx
 import React from 'react';
-import { Dialog, DialogTitle, DialogContent, List, ListItem, ListItemText } from '@mui/material';
-import { Message } from '../types/model';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material';
 
 interface ConversationHistoryProps {
   open: boolean;
   onClose: () => void;
-  history: Message[];
-  onSelect: (message: Message) => void;
 }
 
-const ConversationHistory: React.FC<ConversationHistoryProps> = ({ open, onClose, history, onSelect }) => {
+const ConversationHistory: React.FC<ConversationHistoryProps> = ({ open, onClose }) => {
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Conversation History</DialogTitle>
       <DialogContent>
-        <List>
-          {history.map((msg) => (
-            <ListItem button key={msg.id} onClick={() => onSelect(msg)}>
-              <ListItemText primary={msg.content.slice(0, 50)} secondary={msg.role} />
-            </ListItem>
-          ))}
-        </List>
+        <p>No conversations available.</p> {/* Replace with actual conversation list */}
       </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
     </Dialog>
   );
 };

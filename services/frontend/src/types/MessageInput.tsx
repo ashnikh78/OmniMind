@@ -1,3 +1,4 @@
+// src/components/MessageInput.tsx
 import React, { useState } from 'react';
 import { Box, TextField, IconButton } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
@@ -5,11 +6,9 @@ import SendIcon from '@mui/icons-material/Send';
 interface MessageInputProps {
   onSend: (content: string) => Promise<void>;
   isLoading: boolean;
-  onTemplateSelect: (template: string) => void;
-  onAIAssist: () => void;
 }
 
-const MessageInput: React.FC<MessageInputProps> = ({ onSend, isLoading, onTemplateSelect, onAIAssist }) => {
+const MessageInput: React.FC<MessageInputProps> = ({ onSend, isLoading }) => {
   const [input, setInput] = useState('');
 
   const handleSend = async () => {

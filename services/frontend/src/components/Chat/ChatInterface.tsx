@@ -1,7 +1,8 @@
+// services/frontend/src/components/Chat/ChatInterface.tsx
 import React, { useState, useRef, useEffect } from 'react';
-
 import {
   Box,
+  AppBar,
   Paper,
   Typography,
   CircularProgress,
@@ -9,7 +10,6 @@ import {
   useTheme,
   useMediaQuery,
   Chip,
-  AppBar,
   Toolbar,
   IconButton,
 } from '@mui/material';
@@ -26,13 +26,11 @@ import hljs from 'highlight.js';
 import 'highlight.js/styles/github-dark.css';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-
-import { AIService } from '../../services/aiService';
-import { ModelSettings } from '../../types/model';
-import ModelSettingsDialog from './ModelSettings';
-import ConversationHistory from './ConversationHistory';
-import ChatAnalytics from './ChatAnalytics';
-import MessageInput from './MessageInput';
+import { ModelSettings } from '@/types/model';
+import ModelSettingsDialog from '@/components/Chat/ModelSettingsDialog';
+import ConversationHistory from '@/components/Chat/ConversationHistory';
+import ChatAnalytics from '@/components/Chat/ChatAnalytics';
+import MessageInput from '@/components/Chat/MessageInput';
 
 type Message = {
   id: string;
@@ -46,6 +44,11 @@ type Message = {
   };
 };
 
+type Conversation = {
+  id: string;
+  messages: Message[];
+};
+
 (marked as any).use({
   highlight: (code: string, lang: string) => {
     if (lang && hljs.getLanguage(lang)) {
@@ -56,13 +59,9 @@ type Message = {
   langPrefix: 'hljs language-',
 });
 
-const aiServiceInstance = new AIService(
-  process.env.REACT_APP_API_URL || 'http://localhost:8000',
-  process.env.REACT_APP_API_KEY || ''
-);
-
 const wsUrl = (process.env.REACT_APP_API_URL || 'http://localhost:8000')
-  .replace(/^http/, 'ws') + '/ws/chat';
+  .replace(/^http/, 'ws')
+  .concat('/ws/chat');
 
 const ChatInterface: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -71,6 +70,7 @@ const ChatInterface: React.FC = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [currentAssistantMessage, setCurrentAssistantMessage] = useState<Message | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [modelSettings, setModelSettings] = useState<ModelSettings>({
     temperature: 0.7,
     maxTokens: 2000,
@@ -106,7 +106,7 @@ const ChatInterface: React.FC = () => {
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
     const assistantMessage: Message = {
@@ -132,7 +132,7 @@ const ChatInterface: React.FC = () => {
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'token') {
-          setCurrentAssistantMessage(prev =>
+          setCurrentAssistantMessage((prev) =>
             prev
               ? {
                   ...prev,
@@ -149,7 +149,14 @@ const ChatInterface: React.FC = () => {
             timestamp: new Date(),
             metadata: data.metadata || {},
           };
-          setMessages(prev => [...prev, finalMessage]);
+          setMessages((prev) => {
+            const updatedMessages = [...prev, finalMessage];
+            setConversations((prevConvs) => [
+              ...prevConvs,
+              { id: Date.now().toString(), messages: [userMessage, finalMessage] },
+            ]);
+            return updatedMessages;
+          });
           setCurrentAssistantMessage(null);
           setIsLoading(false);
           ws.close();
@@ -161,11 +168,42 @@ const ChatInterface: React.FC = () => {
         setIsLoading(false);
         setCurrentAssistantMessage(null);
       };
-    } catch {
+    } catch (error) {
       toast.error('Failed to send message');
       setIsLoading(false);
       setCurrentAssistantMessage(null);
     }
+  };
+
+  const handleTemplateSelect = (template: string) => {
+    toast.info(`Selected template: ${template}`);
+    // Add logic to handle template selection
+  };
+
+  const handleAIAssist = () => {
+    toast.info('AI Assist triggered');
+    // Add logic for AI assistance
+  };
+
+  const handleSelectConversation = (conversationId: string) => {
+    const conversation = conversations.find((conv) => conv.id === conversationId);
+    if (conversation) {
+      setMessages(conversation.messages);
+    }
+  };
+
+  const handleDeleteConversation = (conversationId: string) => {
+    setConversations((prev) => prev.filter((conv) => conv.id !== conversationId));
+  };
+
+  const handleUpdateConversation = (conversationId: string, updated: Conversation) => {
+    setConversations((prev) =>
+      prev.map((conv) => (conv.id === conversationId ? updated : conv))
+    );
+  };
+
+  const handleShareConversation = (conversationId: string) => {
+    toast.info(`Shared conversation ${conversationId}`);
   };
 
   const renderMessage = (message: Message) => {
@@ -185,21 +223,23 @@ const ChatInterface: React.FC = () => {
           sx={{
             p: 2,
             maxWidth: '70%',
-            backgroundColor: isUser ? 'primary.light' : 'background.paper',
-            color: isUser ? 'primary.contrastText' : 'text.primary',
+            backgroundColor: isUser ? theme.palette.primary.light : theme.palette.background.paper,
+            color: isUser ? theme.palette.primary.contrastText : theme.palette.text.primary,
           }}
         >
           <Typography
             component="div"
             sx={{
               '& pre': {
-                backgroundColor: 'grey.900',
-                color: 'grey.100',
+                backgroundColor: theme.palette.grey[900],
+                color: theme.palette.grey[100],
                 p: 2,
                 borderRadius: 1,
                 overflowX: 'auto',
               },
-              '& code': { fontFamily: 'monospace' },
+              '& code': {
+                fontFamily: 'monospace',
+              },
             }}
             dangerouslySetInnerHTML={{ __html: marked(message.content) }}
           />
@@ -242,7 +282,7 @@ const ChatInterface: React.FC = () => {
             </Box>
           )}
         </Paper>
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+        <Typography variant="caption" color={theme.palette.text.secondary} sx={{ mt: 0.5 }}>
           {message.timestamp.toLocaleTimeString()}
         </Typography>
       </Box>
@@ -278,8 +318,12 @@ const ChatInterface: React.FC = () => {
       </Box>
 
       <Box sx={{ p: 2 }}>
-        {/* Only pass the props MessageInput expects: onSend and isLoading */}
-        <MessageInput onSend={handleSendMessage} isLoading={isLoading} />
+        <MessageInput
+          onSend={handleSendMessage}
+          isLoading={isLoading}
+          onTemplateSelect={handleTemplateSelect}
+          onAIAssist={handleAIAssist}
+        />
       </Box>
 
       <ModelSettingsDialog
@@ -292,13 +336,14 @@ const ChatInterface: React.FC = () => {
       <ConversationHistory
         open={showHistory}
         onClose={() => setShowHistory(false)}
-        // Removed onSelect prop, as ConversationHistory doesn't expect it
+        conversations={conversations}
+        onSelectConversation={handleSelectConversation}
+        onDeleteConversation={handleDeleteConversation}
+        onUpdateConversation={handleUpdateConversation}
+        onShareConversation={handleShareConversation}
       />
 
-      <ChatAnalytics
-        // Removed open and onClose props since ChatAnalytics does not expect them
-        messages={messages}
-      />
+      <ChatAnalytics messages={messages} />
 
       <ToastContainer />
     </Box>

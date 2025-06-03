@@ -35,7 +35,7 @@ const ModelSettingsDialog: React.FC<ModelSettingsProps> = ({ open, onClose, sett
           <Typography gutterBottom>Temperature: {localSettings.temperature}</Typography>
           <Slider
             value={localSettings.temperature}
-            onChange={(_, value) =>
+            onChange={(e, value) =>
               setLocalSettings({ ...localSettings, temperature: value as number })
             }
             min={0}
@@ -47,7 +47,7 @@ const ModelSettingsDialog: React.FC<ModelSettingsProps> = ({ open, onClose, sett
           <Typography gutterBottom>Max Tokens: {localSettings.maxTokens}</Typography>
           <Slider
             value={localSettings.maxTokens}
-            onChange={(_, value) =>
+            onChange={(e, value) =>
               setLocalSettings({ ...localSettings, maxTokens: value as number })
             }
             min={100}
