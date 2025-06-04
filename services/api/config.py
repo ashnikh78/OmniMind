@@ -19,22 +19,15 @@ class Settings(BaseSettings):
         "http://frontend:80",
         "https://app.apiplatform.ai"
     ]
-    OLLAMA_HOST: str = Field(default="http://ollama:11434")
-
     SECURITY_HEADERS: Dict[str, str] = {
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
         "X-XSS-Protection": "1; mode=block",
         "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-        "Content-Security-Policy": "default-src 'self'; connect-src 'self' ws://localhost:* http://localhost:* http://ollama:11434 http://api:8000; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'",
+        "Content-Security-Policy": "default-src 'self'; connect-src 'self' ws://localhost:* http://localhost:* http://api:8000; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'",
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Permissions-Policy": "geolocation=(), microphone=(), camera=()"
     }
-    TRANSFORMER_EMOTION_MODEL: str = "distilbert-base-uncased-finetuned-sst-2-english"
-    TRANSFORMER_ATTENTION_HEADS: int = 12
-    TRANSFORMER_HIDDEN_SIZE: int = 768
-    TRANSFORMER_DROPOUT: float = 0.1
-    TRANSFORMER_LEARNING_RATE: float = 0.0001
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -44,6 +37,6 @@ class Settings(BaseSettings):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        logger.info(f"Initialized settings: REDIS_URL={self.REDIS_URL}, OLLAMA_HOST={self.OLLAMA_HOST}, SECRET_KEY={self.SECRET_KEY[:10]}...")
+        logger.info(f"Initialized settings: REDIS_URL={self.REDIS_URL}")
 
 settings = Settings()

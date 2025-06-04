@@ -46,7 +46,6 @@ async def login_for_access_token(
     try:
         user = auth_service.get_user_by_email(redis, email=form_data.username)
         if not user:
-            # Handle test user creation for test@example.com
             if form_data.username == "test@example.com" and form_data.password == "test123":
                 test_user_data = {
                     "email": "test@example.com",
