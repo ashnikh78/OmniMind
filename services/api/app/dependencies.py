@@ -23,7 +23,7 @@ def get_redis_client():
         client.ping()
         return client
     except redis.RedisError as e:
-        logger.error(f"Failed to connect to Redis: {str(e)}")
+        logger.error(f"Failed to connect to Redis: {e}")
         raise HTTPException(status_code=503, detail="Redis service unavailable")
 
 async def get_current_active_user(token: str = Depends(oauth2_scheme), redis: Any = Depends(get_redis_client)) -> Dict:
@@ -51,5 +51,5 @@ async def get_current_active_user(token: str = Depends(oauth2_scheme), redis: An
             "created_at": user["created_at"]
         }
     except JWTError as e:
-        logger.error(f"JWT decode error: {str(e)}")
+        logger.error(f"JWT decode error: {e}")
         raise credentials_exception

@@ -34,7 +34,7 @@ async def create_new_user(user: UserCreate, request: Request, redis: Any = Depen
         )
         return UserResponse(**created_user_data)
     except Exception as e:
-        logger.error(f"Error creating user: {str(e)}", exc_info=True)
+        logger.error(f"Error creating user: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/login", response_model=Token, summary="User login")
@@ -76,7 +76,7 @@ async def login_for_access_token(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error during login: {str(e)}", exc_info=True)
+        logger.error(f"Error during login: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/create-test-user", summary="Create a test user", status_code=status.HTTP_201_CREATED)
@@ -98,7 +98,7 @@ async def create_test_user_endpoint(request: Request, redis: Any = Depends(get_r
         )
         return {"message": "Test user created successfully"}
     except Exception as e:
-        logger.error(f"Error creating test user: {str(e)}", exc_info=True)
+        logger.error(f"Error creating test user: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/refresh", response_model=Token, summary="Refresh JWT token")
@@ -123,7 +123,7 @@ async def refresh_user_token(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error refreshing token: {str(e)}", exc_info=True)
+        logger.error(f"Error refreshing token: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.get("/me", response_model=UserResponse, summary="Get current user profile")
@@ -131,5 +131,5 @@ async def read_users_me(current_user: dict = Depends(get_current_active_user)):
     try:
         return UserResponse(**current_user)
     except Exception as e:
-        logger.error(f"Error fetching user profile: {str(e)}", exc_info=True)
+        logger.error(f"Error fetching user profile: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
