@@ -22,15 +22,10 @@ function UserPresence() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Subscribe to presence updates
     websocketService.subscribe('presence', handlePresenceUpdate);
     websocketService.subscribe('analytics', handleAnalyticsUpdate);
-
-    // Initial data fetch
     fetchPresenceData();
     fetchAnalyticsData();
-
-    // Set up polling for analytics
     const analyticsInterval = setInterval(fetchAnalyticsData, 30000);
 
     return () => {
@@ -174,4 +169,4 @@ function UserPresence() {
   );
 }
 
-export default UserPresence; 
+export default UserPresence;

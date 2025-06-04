@@ -1,3 +1,4 @@
+version: '3.8'
 services:
   frontend:
     build:
@@ -7,17 +8,16 @@ services:
       - "80:80"
     environment:
       - NODE_ENV=production
-      - REACT_APP_API_URL=http://localhost:8000
-      - REACT_APP_METRICS_URL=http://localhost:9090
+      - REACT_APP_API_URL=http://api:8000  # Use service name for inter-container communication
+      # - REACT_APP_METRICS_URL=http://prometheus:9090  # Commented until Prometheus is added
     volumes:
-      - ./services/frontend:/app
-      - /app/node_modules
+      - ./services/frontend:/app  # Keep for development, remove in production if not needed
     depends_on:
       - api
     networks:
       - app_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      test: ["CMD", "curl", "-f", "http://localhost"]  # Check if web server is running
       interval: 30s
       timeout: 10s
       retries: 5
@@ -31,195 +31,89 @@ services:
     environment:
       - ENVIRONMENT=production
       - PYTHONUNBUFFERED=1
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/omnimind
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=omnimind
-      - REDIS_URL=redis://:redis@redis:6379/0
+      # Postgres variables (commented until integration is confirmed)
+      # - POSTGRES_USER=postgres
+      # - POSTGRES_PASSWORD=postgres
+      # - POSTGRES_HOST=db
+      # - POSTGRES_PORT=5432
+      # - POSTGRES_DB=omnimind
+      # - DATABASE_URL=postgresql://postgres:postgres@db:5432/omnimind
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=redis
-      - CORS_ORIGINS=http://localhost:80,http://frontend:80,http://localhost:3000
-      - SECRET_KEY=your-secret-key-a
+      - REDIS_URL=redis://:redis@redis:6379/0
+      - BACKEND_CORS_ORIGINS=["http://localhost","http://localhost:80","http://localhost:3000","http://frontend:80","https://app.apiplatform.ai"]
+      - SECRET_KEY=KXWq4ECxVJwFNUfdzpKXOUOavqB_s-Cg0Q7mX03AO0v7bYjmsDv-92l8vbVZxC_j59N_1Af1gL8
       - ALGORITHM=HS256
-      - PROMETHEUS_MULTIPROC_DIR=/tmp
+      - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
       - ML_SERVICE_URL=http://ollama:11434
       - OLLAMA_HOST=http://ollama:11434
       - LOG_LEVEL=DEBUG
-      - SMTP_HOST=smtp.gmail.com
-      - SMTP_PORT=587
-      - SMTP_USER=${SMTP_USER:-noreply@omnimind.example.com}
-      - SMTP_PASSWORD=${SMTP_PASSWORD:-your-app-password}
-      - EMAIL_FROM=noreply@omnimind.example.com
-      - CELERY_BROKER_URL=redis://:redis@redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://:redis@redis:6379/0
+      # SMTP variables (commented until email integration is implemented)
+      # - SMTP_HOST=smtp.gmail.com
+      # - SMTP_PORT=587
+      # - SMTP_USER=${SMTP_USER:-noreply@omnimind.example.com}
+      # - SMTP_PASSWORD=${SMTP_PASSWORD:-your-app-password}
+      # - EMAIL_FROM=noreply@omnimind.example.com
+      # Celery variables (commented until task queue is implemented)
+      # - CELERY_BROKER_URL=redis://:redis@redis:6379/0
+      # - CELERY_RESULT_BACKEND=redis://:redis@redis:6379/0
     volumes:
       - ./services/api:/app
-      - /tmp:/tmp
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      ollama:
-        condition: service_healthy
-    command: sh -c "sleep 10 && uvicorn main:app --host 0.0.0.0 --port 8000"
     networks:
       - app_network
-      - monitoring_network
+    depends_on:
+      - redis
+      - ollama
+      # - db  # Uncomment when Postgres is integrated
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 5
 
-  db:
-    image: postgres:15
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=omnimind
-    ports:
-      - "5433:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - app_network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+  # db:
+  #   image: postgres:16
+  #   environment:
+  #     - POSTGRES_USER=postgres
+  #     - POSTGRES_PASSWORD=postgres
+  #     - POSTGRES_DB=omnimind
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+  #   networks:
+  #     - app_network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
 
   redis:
     image: redis:7
-    command: redis-server --appendonly yes --requirepass redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
+    command: redis-server --requirepass redis
     networks:
       - app_network
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "redis", "ping"]
-      interval: 5s
-      timeout: 5s
+      interval: 30s
+      timeout: 10s
       retries: 5
 
   ollama:
     image: ollama/ollama:latest
     ports:
       - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
     networks:
       - app_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
       retries: 5
 
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./prometheus:/etc/prometheus
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-    ports:
-      - "9090:9090"
-    networks:
-      - monitoring_network
-
-  grafana:
-    image: grafana/grafana:latest
-    volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning
-      - grafana_data:/var/lib/grafana
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
-      - GF_USERS_ENABLED=false
-    ports:
-      - "3000:3000"
-    depends_on:
-      - prometheus
-    networks:
-      - monitoring_network
-
-  node-exporter:
-    image: prom/node-exporter:latest
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/rootfs:ro
-    command:
-      - '--path.procfs=/host/proc'
-      - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($|/)'
-    ports:
-      - "9100:9100"
-    networks:
-      - monitoring_network
-
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:latest
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker:/var/lib/docker:ro
-      - /dev/disk:/dev/disk:ro
-    ports:
-      - "8080:8080"
-    networks:
-      - monitoring_network
-
-  loki:
-    image: grafana/loki:3.2.0
-    ports:
-      - "3100:3100"
-    command: -config.file=/etc/loki/local-config.yaml
-    volumes:
-      - ./loki:/etc/loki
-      - loki_data:/data/loki
-      - ./loki/wal:/data/loki/wal
-      - loki_compactor_data:/data/loki/compactor
-    environment:
-      - LOKI_AUTH_ENABLED=false
-    networks:
-      - monitoring_network
-    user: "10001:10001"
-
-  promtail:
-    image: grafana/promtail:latest
-    volumes:
-      - ./promtail:/etc/promtail
-      - /var/log:/var/log
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: -config.file=/etc/promtail/config.yml
-    depends_on:
-      - loki
-    networks:
-      - monitoring_network
-
 volumes:
-  postgres_data:
-  redis_data:
-  ollama_data:
-  prometheus_data:
-  grafana_data:
-  loki_data:
-  loki_wal:
-  loki_compactor_data:
+  pgdata:
 
 networks:
   app_network:
-    driver: bridge
-  monitoring_network:
     driver: bridge
