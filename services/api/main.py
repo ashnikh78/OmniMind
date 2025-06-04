@@ -1,26 +1,24 @@
-from fastapi import FastAPI, Request, HTTPException, Depends, WebSocket, WebSocketDisconnect, status, Query, Body
+from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect, status, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import Response
 from fastapi.security import OAuth2PasswordBearer
-from pydantic import BaseModel, EmailStr
-from typing import Dict, List, Optional, Any
+from pydantic import BaseModel
+from typing import Dict, List, Optional
 import httpx
 import redis
 import json
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 import time
-import jwt
-from passlib.context import CryptContext
 import psutil
 import ollama
 from fastapi.openapi.utils import get_openapi
 from config import settings
 from app.routers import auth as auth_router
-from app.dependencies import get_current_active_user, get_redis_client, User
-from app.schemas import Collaborator, Document, DocumentUpdate, ChatMessage
+from app.dependencies import get_current_active_user
+from app.schemas import Collaborator, Document, ChatMessage
 
 start_time = time.time()
 
@@ -41,13 +39,10 @@ tags_metadata = [
     {"name": "auth", "description": "User authentication and management endpoints."},
     {"name": "chat", "description": "Real-time chat functionality and message history."},
     {"name": "documents", "description": "Document creation, management, and collaboration."},
-    {"name": "ai-models", "description": "AI model management and interaction (Ollama and ML models)."},
-    {"name": "events", "description": "Event tracking and management."},
+    {"name": "ai-models", "description": "AI model management and interaction."},
     {"name": "presence", "description": "User presence and activity tracking."},
-    {"name": "analytics", "description": "Real-time and enhanced analytics for system and user activity."},
     {"name": "metrics", "description": "Prometheus metrics and system statistics."},
-    {"name": "health", "description": "System health checks."},
-    {"name": "root", "description": "Root endpoint for API status."}
+    {"name": "health", "description": "System health checks."}
 ]
 
 def custom_openapi():
@@ -56,48 +51,13 @@ def custom_openapi():
     openapi_schema = get_openapi(
         title=settings.PROJECT_NAME,
         version="1.0.0",
-        description="API documentation for OmniMind AI platform, providing endpoints for authentication, chat, documents, AI models, events, presence, analytics, and system monitoring.",
+        description="API documentation for OmniMind AI platform.",
         routes=app.routes,
         tags=tags_metadata
     )
     openapi_schema["components"]["securitySchemes"] = {
-        "BearerAuth": {
-            "type": "http",
-            "scheme": "bearer",
-            "bearerFormat": "JWT"
-        }
+        "BearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
     }
-    protected_paths = [
-        "/api/v1/users",
-        "/api/v1/auth/me",
-        "/api/v1/auth/refresh",
-        "/api/chat/messages",
-        "/api/chat/history",
-        "/api/chat/messages/{message_id}",
-        "/api/documents",
-        "/api/documents/{document_id}",
-        "/api/documents/current",
-        "/api/documents/save",
-        "/api/documents/{document_id}/history",
-        "/api/documents/collaborators",
-        "/api/documents/collaborators/{document_id}/{collaborator_id}",
-        "/api/events",
-        "/api/events/{event_id}",
-        "/api/presence",
-        "/api/presence/{user_id}/activities",
-        "/api/analytics/realtime",
-        "/api/analytics/enhanced",
-        "/api/ollama/chat",
-        "/api/ollama/models/{model_name}/pull",
-        "/api/ollama/models/{model_name}",
-        "/api/ollama/models/{model_name}/status",
-        "/api/v1/ml/models",
-        "/api/v1/ml/models/{model_id}",
-        "/api/v1/ml/models/{model_id}/metrics"
-    ]
-    for path, path_item in openapi_schema["paths"].items():
-        for method in path_item.values():
-            method["security"] = [{"BearerAuth": []}] if path in protected_paths else []
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
@@ -120,7 +80,6 @@ async def add_security_headers(request: Request, call_next):
     return response
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 REQUEST_COUNT = Counter('http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
 REQUEST_LATENCY = Histogram('http_request_duration_seconds', 'HTTP request latency', ['method', 'endpoint'])
@@ -148,12 +107,9 @@ def init_redis_client(max_retries: int = 3, retry_delay: int = 1) -> redis.Redis
     return None
 
 redis_client = init_redis_client()
-app.state.redis_client = redis_client if redis_client else None
-
+app.state.redis_client = redis_client
 app.state.settings = settings
-app.state.pwd_context = pwd_context
-app.state.oauth2_scheme = oauth2_scheme
-
+app.state.pwd_context = auth_service.pwd_context
 http_client = httpx.AsyncClient(timeout=30.0)
 
 class UserPresence:
@@ -175,12 +131,6 @@ class UserPresence:
             self.online_users[user_id]["last_seen"] = datetime.utcnow().isoformat()
             self._add_activity(user_id, "disconnected")
 
-    def update_user_status(self, user_id: str, status: str) -> None:
-        if user_id in self.online_users:
-            self.online_users[user_id]["status"] = status
-            self.online_users[user_id]["last_seen"] = datetime.utcnow().isoformat()
-            self._add_activity(user_id, f"status_changed_{status}")
-
     def _add_activity(self, user_id: str, activity: str) -> None:
         if user_id not in self.user_activities:
             self.user_activities[user_id] = []
@@ -193,26 +143,19 @@ class UserPresence:
     def get_online_users(self) -> Dict[str, Dict]:
         return self.online_users
 
-    def get_user_activities(self, user_id: str, limit: int = 10) -> List[Dict]:
-        return self.user_activities.get(user_id, [])[-limit:]
-
 user_presence = UserPresence()
 
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
-        self.user_connections: Dict[str, WebSocket] = {}
         self.user_data: Dict[str, dict] = {}
-        self.connection_timestamps: Dict[str, float] = {}
 
     async def connect(self, websocket: WebSocket, client_id: str, user_data: dict) -> None:
         await websocket.accept()
         if client_id not in self.active_connections:
             self.active_connections[client_id] = []
         self.active_connections[client_id].append(websocket)
-        self.user_connections[client_id] = websocket
         self.user_data[client_id] = user_data
-        self.connection_timestamps[client_id] = time.time()
         user_presence.user_connected(client_id, user_data)
         await self.broadcast_user_presence()
 
@@ -223,18 +166,11 @@ class ConnectionManager:
                 del self.active_connections[client_id]
                 user_presence.user_disconnected(client_id)
                 asyncio.create_task(self.broadcast_user_presence())
-        if client_id in self.user_connections:
-            del self.user_connections[client_id]
         if client_id in self.user_data:
             del self.user_data[client_id]
-        if client_id in self.connection_timestamps:
-            del self.connection_timestamps[client_id]
 
     async def broadcast_user_presence(self) -> None:
-        await self.broadcast({
-            "type": "presence",
-            "data": user_presence.get_online_users()
-        })
+        await self.broadcast({"type": "presence", "data": user_presence.get_online_users()})
 
     async def broadcast(self, message: dict, exclude: Optional[str] = None) -> None:
         for client_id, connections in self.active_connections.items():
@@ -248,33 +184,13 @@ class ConnectionManager:
                         logger.error(f"Error broadcasting to {client_id}: {str(e)}")
                         self.disconnect(connection, client_id)
 
-    async def send_personal_message(self, message: dict, client_id: str) -> None:
-        if client_id in self.user_connections:
-            try:
-                await self.user_connections[client_id].send_json(message)
-            except WebSocketDisconnect:
-                self.disconnect(self.user_connections[client_id], client_id)
-            except Exception as e:
-                logger.error(f"Error sending personal message to {client_id}: {str(e)}")
-                self.disconnect(self.user_connections[client_id], client_id)
-
 manager = ConnectionManager()
 
 class AnalyticsMetrics:
     def __init__(self):
         self.request_counts = REQUEST_COUNT
         self.request_latency = REQUEST_LATENCY
-        self.active_users = Gauge('active_users_total', 'Total active users')
-        self.chat_messages = Counter('chat_messages_total', 'Total chat messages sent')
-        self.file_uploads = Counter('file_uploads_total', 'Total files uploaded', ['file_type'])
-        self.user_sessions = Counter('user_sessions_total', 'Total user sessions')
-        self.error_count = Counter('error_count_total', 'Total errors', ['type'])
         self.websocket_connections = Gauge('websocket_connections_total', 'Total WebSocket connections')
-        self.api_latency = Histogram('api_latency_seconds', 'API endpoint latency', ['endpoint'])
-        self.cache_hits = Counter('cache_hits_total', 'Total cache hits')
-        self.cache_misses = Counter('cache_misses_total', 'Total cache misses')
-        self.memory_usage = Gauge('memory_usage_bytes', 'Memory usage in bytes')
-        self.cpu_usage = Gauge('cpu_usage_percent', 'CPU usage percentage')
 
 analytics = AnalyticsMetrics()
 
@@ -289,7 +205,6 @@ async def rate_limit_middleware(request: Request, call_next):
         count = app.state.redis_client.get(key)
         count = int(count) if count else 0
         if count >= 100:
-            analytics.error_count.labels(type='rate_limit').inc()
             raise HTTPException(status_code=429, detail="Too many requests")
         app.state.redis_client.incr(key)
         app.state.redis_client.expire(key, 60)
@@ -307,10 +222,9 @@ async def rate_limit_middleware(request: Request, call_next):
         ).observe(duration)
         return response
     except redis.RedisError:
-        analytics.error_count.labels(type='redis_error').inc()
         return await call_next(request)
 
-@app.get("/health", tags=["health"], summary="Check system health")
+@app.get("/health", tags=["health"])
 async def health_check():
     status = {
         "status": "healthy",
@@ -326,128 +240,17 @@ async def health_check():
             status["redis"] = f"error: {str(e)}"
     return status
 
-@app.get("/", tags=["root"], summary="API root endpoint")
-async def root():
-    return {
-        "status": "ok",
-        "message": f"{settings.PROJECT_NAME} API Gateway is running",
-        "version": "1.0.0",
-        "endpoints": {
-            "health": "/health",
-            "metrics": "/metrics",
-            "api": "/api",
-            "auth": f"{settings.API_V1_STR}/auth"
-        }
-    }
-
-@app.post("/api/v1/auth/refresh", tags=["auth"], summary="Refresh JWT token")
-async def refresh_token(request: Request, current_user: User = Depends(get_current_active_user)):
-    if not app.state.redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
-    token = await request.json()
-    token = token.get("token")
-    if not token:
-        raise HTTPException(status_code=400, detail="Token is required")
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    user_id = payload.get("sub")
-    user_data = json.loads(app.state.redis_client.get(f"user:{user_id}") or "{}")
-    new_token = jwt.encode(
-        {
-            "sub": user_id,
-            "username": user_data.get("username", current_user.username),
-            "email": user_data.get("email", current_user.email),
-            "role": user_data.get("role", "user"),
-            "exp": datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        },
-        settings.SECRET_KEY,
-        algorithm=settings.ALGORITHM
-    )
-    return {
-        "access_token": new_token,
-        "token_type": "bearer",
-        "user": {
-            "id": user_id,
-            "username": user_data.get("username", current_user.username),
-            "email": user_data.get("email", current_user.email),
-            "role": user_data.get("role", "user")
-        }
-    }
-
-@app.get("/api/v1/auth/me", tags=["auth"], summary="Get current user profile")
-async def get_current_user_profile(current_user: User = Depends(get_current_active_user)):
-    profile = {
-        "id": current_user.id,
-        "username": current_user.username,
-        "email": current_user.email,
-        "is_active": current_user.is_active,
-        "is_admin": current_user.is_admin,
-        "preferences": {
-            "theme": "light",
-            "notifications": {"email": True, "push": True, "desktop": True},
-            "language": "en",
-            "timezone": "UTC"
-        },
-        "stats": {
-            "lastLogin": datetime.utcnow().isoformat(),
-            "loginCount": 1,
-            "documentCount": 0,
-            "messageCount": 0
-        },
-        "roles": ["admin" if current_user.is_admin else "user"],
-        "permissions": ["read", "write"] if current_user.is_admin else ["read"]
-    }
-    return profile
-
-@app.post("/api/chat/messages", tags=["chat"], summary="Send a chat message")
-async def create_chat_message(message: ChatMessage, current_user: User = Depends(get_current_active_user)):
-    if not app.state.redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
-    message_id = app.state.redis_client.incr("chat_message_counter")
-    message_dict = message.dict()
-    message_dict["id"] = message_id
-    app.state.redis_client.set(f"chat_message:{message_id}", json.dumps(message_dict))
-    app.state.redis_client.expire(f"chat_message:{message_id}", 86400)
-    app.state.redis_client.lpush("recent_chat_messages", json.dumps(message_dict))
-    app.state.redis_client.ltrim("recent_chat_messages", 0, 999)
-    await manager.broadcast({"type": "chat", "data": message_dict})
-    analytics.chat_messages.inc()
-    if message_dict.get("file"):
-        file_type = message_dict["file"].get("type", "unknown")
-        analytics.file_uploads.labels(file_type=file_type).inc()
-        app.state.redis_client.hincrby("file_uploads_by_type", file_type, 1)
-    return message_dict
-
-@app.get("/api/chat/history", tags=["chat"], summary="Get chat history")
-async def get_chat_history(limit: int = 50, current_user: User = Depends(get_current_active_user)):
-    if not app.state.redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
-    messages = [json.loads(msg) for msg in app.state.redis_client.lrange("recent_chat_messages", 0, limit - 1)]
-    return messages
-
-@app.get("/api/chat/messages/{message_id}", tags=["chat"], summary="Get a specific chat message")
-async def get_chat_message(message_id: int, current_user: User = Depends(get_current_active_user)):
-    if not app.state.redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
-    message_json = app.state.redis_client.get(f"chat_message:{message_id}")
-    if not message_json:
-        raise HTTPException(status_code=404, detail="Message not found")
-    return json.loads(message_json)
-
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = Query(...)):
-    user = await get_current_active_user(token)
-    if not user or client_id != user.id:
+    user = await get_current_active_user(token, redis=app.state.redis_client)
+    if not user or client_id != user["id"]:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
     
     await manager.connect(websocket, client_id, {
-        "id": user.id,
-        "email": user.email,
-        "name": user.username,
-        "role": "admin" if user.is_admin else "user"
+        "id": user["id"],
+        "email": user["email"],
+        "role": user["role"]
     })
     
     try:
@@ -457,26 +260,6 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 message = json.loads(data)
                 if message.get("type") == "heartbeat":
                     await websocket.send_json({"type": "heartbeat"})
-                    continue
-                if message.get("type") == "chat":
-                    chat_message = ChatMessage(**message["data"])
-                    await create_chat_message(chat_message, current_user=user)
-                elif message.get("type") == "chat_typing":
-                    await manager.broadcast({
-                        "type": "chat_typing",
-                        "data": {"user_id": client_id, "isTyping": message["data"]["isTyping"]}
-                    })
-                elif message.get("type") == "broadcast":
-                    await manager.broadcast(message, exclude=client_id)
-                elif message.get("type") == "personal":
-                    target_id = message.get("target_id")
-                    if target_id:
-                        await manager.send_personal_message(message, target_id)
-                elif message.get("type") == "status":
-                    user_presence.update_user_status(client_id, message.get("status", "online"))
-                    await manager.broadcast_user_presence()
-                else:
-                    await websocket.send_json({"error": "Invalid message type"})
             except json.JSONDecodeError:
                 await websocket.send_json({"error": "Invalid JSON"})
             except Exception as e:
@@ -484,496 +267,6 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 await websocket.send_json({"error": "Internal server error"})
     except WebSocketDisconnect:
         manager.disconnect(websocket, client_id)
-    except Exception as e:
-        logger.error(f"Unexpected WebSocket error: {str(e)}")
-        manager.disconnect(websocket, client_id)
-
-@app.post("/api/documents", tags=["documents"], summary="Create a new document")
-async def create_document(document: Document, current_user: User = Depends(get_current_active_user)):
-    if not app.state.redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
-    if document.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Unauthorized owner_id")
-    document_id = app.state.redis_client.incr("document_counter")
-    document_dict = document.dict()
-    document_dict["id"] = str(document_id)
-    app.state.redis_client.set(f"document:{document_id}", json.dumps(document_dict))
-    app.state.redis_client.sadd(f"user_documents:{document.owner_id}", document_id)
-    app.state.redis_client.lpush(f"document_history:{document_id}", json.dumps({
-        "type": "create",
-        "user_id": document.owner_id,
-        "timestamp": document.created_at
-    }))
-    return {
-        "status": "success",
-        "document": document_dict
-    }
-
-@app.get("/api/documents/{document_id}", tags=["documents"], summary="Get a document")
-async def get_document(document_id: str, current_user: User = Depends(get_current_active_user)):
-    if not app.state.redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
-    document_json = app.state.redis_client.get(f"document:{document_id}")
-    if not document_json:
-        raise HTTPException(status_code=404, detail="Document not found")
-    document = json.loads(document_json)
-    if document["owner_id"] != current_user.id and current_user.id not in [c["id"] for c in document.get("collaborators", [])]:
-        raise HTTPException(status_code=403, detail="Unauthorized")
-    return document
-
-@app.get("/api/documents/current", tags=["documents"], summary="Get the current document")
-async def get_current_document(current_user: User = Depends(get_current_active_user)):
-    if not app.state.redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
-    document_id = app.state.redis_client.get(f"user_current_document:{current_user.id}")
-    if not document_id:
-        raise HTTPException(status_code=404, detail="No current document")
-    return await get_document(document_id, current_user)
-
-@app.post("/api/documents/save", tags=["documents"], summary="Save a document")
-async def save_document(document: Document, current_user: User = Depends(get_current_active_user)):
-    if not app.state.redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
-    document_json = app.state.redis_client.get(f"document:{document.id}")
-    if not document_json:
-        raise HTTPException(status_code=404, detail="Document not found")
-    existing_doc = json.loads(document_json)
-    if existing_doc["owner_id"] != current_user.id and current_user.id not in [c["id"] for c in existing_doc.get("collaborators", [])]:
-        raise HTTPException(status_code=403, detail="Unauthorized")
-    document_dict = document.dict()
-    app.state.redis_client.set(f"document:{document.id}", json.dumps(document_dict))
-    app.state.redis_client.lpush(f"document_history:{document.id}", json.dumps({
-        "type": "update",
-        "user_id": current_user.id,
-        "timestamp": document.updated_at
-    }))
-    await manager.broadcast({
-        "type": "document_update",
-        "data": {
-            "document_id": document.id,
-            "content": document.content,
-            "title": document.title,
-            "timestamp": document.updated_at
-        }
-    })
-    return document_dict
-
-@app.get("/api/documents/{document_id}/history", tags=["documents"], summary="Get document history")
-async def get_document_history(document_id: str, limit: int = 50, current_user: User = Depends(get_current_active_user)):
-    if not app.state.redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
-    document_json = app.state.redis_client.get(f"document:{document_id}")
-    if not document_json:
-        raise HTTPException(status_code=404, detail="Document not found")
-    document = json.loads(document_json)
-    if document["owner_id"] != current_user.id and current_user.id not in [c["id"] for c in document.get("collaborators", [])]:
-        raise HTTPException(status_code=403, detail="Unauthorized")
-    history = [json.loads(entry) for entry in app.state.redis_client.lrange(f"document_history:{document_id}", 0, limit - 1)]
-    return history
-
-@app.post("/api/documents/collaborators", tags=["documents"], summary="Add a collaborator to a document")
-async def add_collaborator(document_id: str = Query(...), collaborator: Collaborator = Body(...), current_user: User = Depends(get_current_active_user)):
-    if not app.state.redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
-    document_json = app.state.redis_client.get(f"document:{document_id}")
-    if not document_json:
-        raise HTTPException(status_code=404, detail="Document not found")
-    document = json.loads(document_json)
-    if document.get("owner_id") != current_user.id and current_user.id not in [c["id"] for c in document.get("collaborators", [])]:
-        raise HTTPException(status_code=403, detail="Unauthorized")
-    
-    document_dict = document.copy()
-    
-    if collaborator.id not in [c["id"] for c in document_dict.get("collaborators", [])]:
-        document_dict["collaborators"].append(collaborator.dict())
-        app.state.redis_client.set(f"document:{document_id}", json.dumps(document_dict))
-        app.state.redis_client.lpush(f"document_history:{document_id}", json.dumps({
-            "type": "add_collaborator",
-            "user_id": current_user.id,
-            "collaborator_id": collaborator.id,
-            "timestamp": datetime.utcnow().isoformat()
-        }))
-        await manager.send_personal_message({
-            "type": "document_invite",
-            "data": {
-                "document_id": document_id,
-                "document_title": document_dict["title"],
-                "inviter_id": current_user.id
-            }
-        }, collaborator.id)
-    return document_dict
-
-@app.delete("/api/documents/{document_id}/collaborators/{collaborator_id}", tags=["documents"], summary="Remove collaborator")
-async def delete_collaborator(document_id: str, collaborator_id: str, current_user: User = Depends(get_current_active_user)):
-    if not app.state.redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
-    document_json = app.state.redis_client.get(f"document:{document_id}")
-    if not document_json:
-        raise HTTPException(status_code=404, detail="Document not found")
-    document = json.loads(document_json)
-    if document["owner_id"] != current_user.id:
-        raise HTTPException(status_code=403, detail="Only the owner can remove collaborators")
-    document_dict = document.copy()
-    document_dict["collaborators"] = [c for c in document_dict.get("collaborators", []) if c["id"] != collaborator_id]
-    app.state.redis_client.set(f"document:{document_id}", json.dumps(document_dict))
-    app.state.redis_client.lpush(f"document_history:{document_id}", json.dumps({
-        "type": "remove_collaborator",
-        "user_id": current_user.id,
-        "collaborator_id": collaborator_id,
-        "timestamp": datetime.utcnow().isoformat()
-    }))
-    await manager.send_personal_message({
-        "type": "document_removed",
-        "data": {
-            "document_id": document_id,
-            "document_title": document_dict["title"]
-        }
-    }, collaborator_id)
-    return {"status": "success"}
-
-@app.get("/api/ollama/models", tags=["ai-models"], summary="List available Ollama models")
-async def get_available_models(current_user: User = Depends(get_current_active_user)):
-    try:
-        logger.info(f"Connecting to Ollama at {settings.OLLAMA_HOST}")
-        client = ollama.Client(host=settings.OLLAMA_HOST)
-        models = await client.list()
-        logger.info(f"Retrieved models: {models}")
-        return models.get("models", [])
-    except Exception as e:
-        logger.error(f"Ollama connection failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/ollama/chat", tags=["ai-models"], summary="Chat with an Ollama model")
-async def chat_with_model(request: Dict[str, Any], current_user: User = Depends(get_current_active_user)):
-    if not app.state.redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
-    try:
-        model_name = request.get("model", "llama2")
-        message = request.get("content", "")
-        settings_dict = request.get("settings", {})
-        persona = request.get("persona", None)
-        prompt = f"[Persona: {persona.get('name', persona)}]\n{persona.get('prompt', '')}\n\n{message}" if persona else message
-        
-        response = await ollama.Client(host=settings.OLLAMA_HOST).generate(
-            model=model_name,
-            prompt=prompt,
-            options={
-                "temperature": settings_dict.get("temperature", 0.7),
-                "num_predict": settings_dict.get("maxTokens", 2048),
-                "top_p": settings_dict.get("topP", 0.9)
-            }
-        )
-        chat_message = {
-            "sender_id": "ai",
-            "sender_name": f"{model_name.capitalize()} AI",
-            "content": response["response"],
-            "timestamp": datetime.utcnow().isoformat(),
-            "model": model_name,
-            "persona": persona,
-            "settings": settings_dict,
-            "metrics": {
-                "latency": response.get("total_duration", 0) / 1e9,
-                "gpu_memory": 0
-            }
-        }
-        message_id = app.state.redis_client.incr("chat_message_counter")
-        chat_message["id"] = message_id
-        app.state.redis_client.set(f"chat_message:{message_id}", json.dumps(chat_message))
-        app.state.redis_client.expire(f"chat_message:{message_id}", 86400)
-        app.state.redis_client.lpush("recent_chat_messages", json.dumps(chat_message))
-        app.state.redis_client.ltrim("recent_chat_messages", 0, 999)
-        await manager.broadcast({"type": "chat", "data": chat_message})
-        return chat_message
-    except Exception as e:
-        logger.error(f"Ollama chat error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/ollama/models/{model_name}/pull", tags=["ai-models"], summary="Pull an Ollama model")
-async def pull_model(model_name: str, current_user: User = Depends(get_current_active_user)):
-    try:
-        client = ollama.Client(host=settings.OLLAMA_HOST)
-        await client.pull(model_name)
-        return {"status": "success", "message": f"Model {model_name} pulled successfully"}
-    except Exception as e:
-        logger.error(f"Ollama pull error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.delete("/api/ollama/models/{model_name}", tags=["ai-models"], summary="Delete an Ollama model")
-async def delete_model(model_name: str, current_user: User = Depends(get_current_active_user)):
-    try:
-        client = ollama.Client(host=settings.OLLAMA_HOST)
-        await client.delete(model_name)
-        return {"status": "success", "message": f"Model {model_name} deleted successfully"}
-    except Exception as e:
-        logger.error(f"Error deleting model: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/ollama/models/{model_name}/status", tags=["ai-models"], summary="Get Ollama model status")
-async def get_model_status(model_name: str, current_user: User = Depends(get_current_active_user)):
-    try:
-        client = ollama.Client(host=settings.OLLAMA_HOST)
-        models = await client.list()
-        model = next((m for m in models.get("models", []) if m["name"] == model_name), None)
-        if not model:
-            raise HTTPException(status_code=404, detail="Model not found")
-        return {
-            "name": model_name,
-            "loaded": True,
-            "last_used": datetime.utcnow().isoformat(),
-            "concurrent_requests": 0,
-            "gpu_enabled": False,
-            "gpu_memory": 0
-        }
-    except Exception as e:
-        logger.error(f"Error in get_model_status: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/v1/ml/models", tags=["ai-models"], summary="List ML models")
-async def get_ml_models(current_user: User = Depends(get_current_active_user)):
-    return [
-        {
-            "id": "model-1",
-            "name": "GPT-4",
-            "status": "active",
-            "description": "Advanced language model for text generation and analysis",
-            "capabilities": ["text-generation", "code-completion", "translation"],
-            "metrics": {"accuracy": 0.95, "latency": 0.5, "throughput": 100}
-        },
-        {
-            "id": "model-2",
-            "name": "DALL-E 3",
-            "status": "active",
-            "description": "Image generation model",
-            "capabilities": ["image-generation", "image-editing"],
-            "metrics": {"quality": 0.92, "generation_time": 2.5, "success_rate": 0.98}
-        },
-        {
-            "id": "model-3",
-            "name": "Whisper",
-            "status": "active",
-            "description": "Speech recognition model",
-            "capabilities": ["speech-to-text", "transcription"],
-            "metrics": {"accuracy": 0.94, "processing_time": 1.2, "languages_supported": 50}
-        }
-    ]
-
-@app.get("/api/v1/ml/models/{model_id}", tags=["ai-models"], summary="Get an ML model")
-async def get_ml_model(model_id: str, current_user: User = Depends(get_current_active_user)):
-    return {
-        "id": model_id,
-        "name": "GPT-4",
-        "status": "active",
-        "description": "Advanced language model for text generation and analysis",
-        "tags": ["capabilities"],
-        "metrics": [
-            {"accuracy": 0.95},
-            {"latency": 0.5},
-            {"throughput": 100}
-        ],
-        "config": {
-            "max_tokens": 2048,
-            "temperature": 0.7,
-            "top_p": 0.9
-        }
-    }
-
-@app.get("/api/v1/ml/models/{model_id}/metrics", tags=["ai-models"], summary="Get ML model metrics")
-async def get_ml_model_metrics(model_id: str, current_user: User = Depends(get_current_active_user)):
-    try:
-        return {
-            "performance": {
-                "accuracy": 0.95,
-                "latency": 0.5,
-                "throughput": 100,
-                "error_rate": 0.05
-            },
-            "usage": {
-                "requests": 1000,
-                "tokens": 50000,
-                "avg_latency": 0.5
-            },
-            "errors": [
-                {"type": "timeout", "count": 20},
-                {"type": "validation", "count": 15},
-                {"type": "other", "count": 15}
-            ]
-        }
-    except Exception as e:
-        logger.error(f"Error in get_ml_model_metrics: {str(e)}")
-        return {
-            "performance": {
-                "accuracy": 0,
-                "latency": 0,
-                "throughput": 0,
-                "error_rate": 0
-            },
-            "usage": {
-                "requests": 0,
-                "tokens": 0,
-                "avg_latency": 0
-            },
-            "errors": []
-        }
-
-@app.post("/api/events", tags=["events"], summary="Create an event")
-async def create_event(event: dict, current_user: User = Depends(get_current_active_user)):
-    if not app.state.redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
-    event_id = app.state.redis_client.incr("event_counter")
-    event["id"] = event_id
-    event["user_id"] = current_user.id
-    event["timestamp"] = datetime.utcnow().isoformat()
-    app.state.redis_client.set(f"event:{event_id}", json.dumps(event))
-    app.state.redis_client.expire(f"event:{event_id}", 600)
-    app.state.redis_client.lpush("recent_events", json.dumps(event))
-    app.state.redis_client.ltrim("recent_events", 0, 99)
-    await manager.broadcast({"type": "event", "data": event})
-    return event
-
-@app.get("/api/events", tags=["events"], summary="List recent events")
-async def get_events(limit: int = 10, current_user: User = Depends(get_current_active_user)):
-    if not app.state.redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
-    events = [json.loads(event) for event in app.state.redis_client.lrange("recent_events", 0, limit - 1)]
-    return [e for e in events if e["user_id"] == current_user.id]
-
-@app.get("/api/events/{event_id}", tags=["events"], summary="Get an event")
-async def get_event(event_id: int, current_user: User = Depends(get_current_active_user)):
-    if not app.state.redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
-    event_json = app.state.redis_client.get(f"event:{event_id}")
-    if not event_json:
-        raise HTTPException(status_code=404, detail="Event not found")
-    event_data = json.loads(event_json)
-    if event_data["user_id"] != current_user.id:
-        raise HTTPException(status_code=403, detail="Unauthorized")
-    return event_data
-
-@app.get("/api/presence", tags=["presence"], summary="Get online users")
-async def get_presence(current_user: User = Depends(get_current_active_user)):
-    return user_presence.get_online_users()
-
-@app.get("/api/presence/{user_id}/activities", tags=["presence"], summary="Get user activities")
-async def get_user_activities(user_id: str, limit: int = 10, current_user: User = Depends(get_current_active_user)):
-    if user_id != current_user.id and not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Unauthorized")
-    return user_presence.get_user_activities(user_id, limit)
-
-@app.get("/api/analytics/realtime", tags=["analytics"], summary="Get real-time analytics")
-async def get_realtime_analytics(current_user: User = Depends(get_current_active_user)):
-    metrics = {
-        "active_users": len(manager.user_connections),
-        "total_connections": sum(len(conns) for conns in manager.active_connections.values()),
-        "user_roles": {},
-        "recent_activities": [],
-        "system_metrics": {
-            "cpu_usage": psutil.cpu_percent(),
-            "memory_usage": psutil.virtual_memory().used,
-            "uptime": time.time() - start_time
-        }
-    }
-    for user_data in manager.user_data.values():
-        role = user_data.get("role", "unknown")
-        metrics["user_roles"][role] = metrics["user_roles"].get(role, 0) + 1
-    for user_id, activities in user_presence.user_activities.items():
-        metrics["recent_activities"].extend(activities[-5:])
-    metrics["recent_activities"].sort(key=lambda x: x["timestamp"], reverse=True)
-    metrics["recent_activities"] = metrics["recent_activities"][:20]
-    if app.state.redis_client:
-        try:
-            redis_info = app.state.redis_client.info()
-            metrics["redis"] = {
-                "connected_clients": redis_info.get("connected_clients", 0),
-                "used_memory": redis_info.get("used_memory_human", "0"),
-                "total_connections_received": redis_info.get("total_connections_received", 0)
-            }
-        except redis.RedisError:
-            metrics["redis"] = {"error": "Failed to get Redis metrics"}
-    else:
-        metrics["redis"] = {"error": "Redis service unavailable"}
-    return metrics
-
-@app.get("/api/analytics/enhanced", tags=["analytics"], summary="Get enhanced analytics")
-async def get_enhanced_analytics(current_user: User = Depends(get_current_active_user)):
-    metrics = {
-        "system": {
-            "active_connections": len(manager.user_connections),
-            "total_events": 0,
-            "recent_events_count": 0,
-            "redis_memory_used": "0",
-            "uptime": time.time() - start_time,
-            "memory_usage": psutil.virtual_memory().used,
-            "cpu_usage": psutil.cpu_percent(),
-        },
-        "users": {
-            "active_users": len(manager.user_connections),
-            "user_roles": {},
-            "user_status": {"online": 0, "away": 0, "busy": 0, "offline": 0},
-            "recent_activities": []
-        },
-        "chat": {
-            "total_messages": 0,
-            "messages_last_hour": 0,
-            "active_chats": 0,
-            "file_uploads": {
-                "total": 0,
-                "by_type": {}
-            }
-        },
-        "performance": {
-            "request_counts": {"total": 0, "by_endpoint": {}, "by_status": {}},
-            "latency": {"average": 0, "p95": 0, "p99": 0},
-            "errors": {"total": 0, "by_type": {}}
-        }
-    }
-    for user_data in manager.user_data.values():
-        role = user_data.get("role", "unknown")
-        metrics["users"]["user_roles"][role] = metrics["users"]["user_roles"].get(role, 0) + 1
-        status = user_presence.online_users.get(user_data["id"], {}).get("status", "offline")
-        metrics["users"]["user_status"][status] = metrics["users"]["user_status"].get(status, 0) + 1
-    for user_id, activities in user_presence.user_activities.items():
-        metrics["users"]["recent_activities"].extend(activities[-5:])
-    metrics["users"]["recent_activities"].sort(key=lambda x: x["timestamp"], reverse=True)
-    metrics["users"]["recent_activities"] = metrics["users"]["recent_activities"][:20]
-    if app.state.redis_client:
-        metrics["system"]["total_events"] = int(app.state.redis_client.get("event_counter") or 0)
-        metrics["system"]["recent_events_count"] = app.state.redis_client.llen("recent_events")
-        metrics["system"]["redis_memory_used"] = app.state.redis_client.info().get("used_memory_human", "0")
-        metrics["chat"]["total_messages"] = int(app.state.redis_client.get("chat_message_counter") or 0)
-        metrics["chat"]["messages_last_hour"] = app.state.redis_client.llen("recent_chat_messages")
-        metrics["chat"]["active_chats"] = len(set(json.loads(msg)["sender_id"] for msg in app.state.redis_client.lrange("recent_chat_messages", 0, -1)))
-        metrics["chat"]["file_uploads"]["total"] = int(app.state.redis_client.get("file_upload_counter") or 0)
-        metrics["chat"]["file_uploads"]["by_type"] = {k: int(v) for k, v in app.state.redis_client.hgetall("file_uploads_by_type").items()}
-    return metrics
-
-@app.get("/metrics", tags=["metrics"], summary="Prometheus metrics")
-async def metrics():
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
-
-@app.get("/api/metrics", tags=["metrics"], summary="System metrics")
-async def get_metrics():
-    metrics = {
-        "active_connections": len(manager.user_connections),
-        "total_events": 0,
-        "recent_events_count": 0,
-        "redis_memory_used": "0",
-        "uptime": time.time() - start_time
-    }
-    if app.state.redis_client:
-        metrics["total_events"] = int(app.state.redis_client.get("event_counter") or 0)
-        metrics["recent_events_count"] = app.state.redis_client.llen("recent_events")
-        metrics["redis_memory_used"] = app.state.redis_client.info().get("used_memory_human", "0")
-    return metrics
-
-@app.get("/api/health/redis", tags=["health"], summary="Check Redis health")
-async def redis_health_check():
-    if not app.state.redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
-    try:
-        app.state.redis_client.ping()
-        return {"status": "healthy", "message": "Redis connection is working"}
-    except redis.RedisError as e:
-        raise HTTPException(status_code=503, detail=f"Redis connection failed: {str(e)}")
 
 @app.on_event("startup")
 async def startup_event():
@@ -983,8 +276,6 @@ async def startup_event():
             app.state.redis_client.ping()
             logger.info("Redis connection verified on startup")
         analytics.websocket_connections.set(0)
-        analytics.memory_usage.set(psutil.virtual_memory().used)
-        analytics.cpu_usage.set(psutil.cpu_percent())
     except Exception as e:
         logger.error(f"Startup event failed: {str(e)}", exc_info=True)
 
@@ -1001,16 +292,20 @@ async def shutdown_event():
         logger.error(f"Shutdown event failed: {str(e)}", exc_info=True)
 
 try:
-    app.include_router(auth_router.router, prefix=settings.API_V1_STR)
-    logger.info("Auth router included successfully")
+    app.include_router(auth_router.router)
+    app.include_router(auth_router.user_router)
+    logger.info("Auth routers included successfully")
 except Exception as e:
-    logger.error(f"Failed to include auth router: {str(e)}", exc_info=True)
+    logger.error(f"Failed to include auth routers: {str(e)}", exc_info=True)
+    raise
 
 if __name__ == "__main__":
     import uvicorn
+    import traceback
     try:
         logger.info("Starting FastAPI application...")
         uvicorn.run(app, host="0.0.0.0", port=8000, log_level="debug")
     except Exception as e:
-        logger.error(f"Failed to start FastAPI application: {str(e)}", exc_info=True)
+        logger.error(f"Failed to start FastAPI application: {str(e)}")
+        logger.error(traceback.format_exc())
         raise
