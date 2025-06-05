@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 from app.core import get_settings
 from app.middleware.security import add_security_headers
-from app.core.redis import init_redis_client, close_redis_client
+from app.core import init_redis_client, close_redis_client
 import time
 
 # Initialize settings first
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="Enterprise-grade AI platform for authentication and chat.",
+    description="Enterprise-grade AI platform",
     version="1.0.0",
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
@@ -35,7 +35,7 @@ app.add_middleware(
 )
 app.middleware("http")(add_security_headers)
 
-# Initialize app state (Redis will be initialized in startup event)
+# Initialize app state
 app.state.redis_client = None
 app.state.start_time = time.time()
 
@@ -53,7 +53,6 @@ include_routers()
 
 @app.on_event("startup")
 def startup_event():
-    """Initialize Redis connection on startup"""
     logger.info("Starting FastAPI application")
     try:
         app.state.redis_client = init_redis_client()
@@ -67,7 +66,6 @@ def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Clean up Redis connection on shutdown"""
     logger.info("Shutting down FastAPI application")
     if app.state.redis_client:
         await close_redis_client(app.state.redis_client)
