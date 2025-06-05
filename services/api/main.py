@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 from app.core import get_settings
 from app.middleware.security import add_security_headers
-from app.core import init_redis_client, close_redis_client
+from app.core.redis import init_redis_client, close_redis_client
 import time
 
 # Initialize settings first
