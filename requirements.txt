@@ -1,4 +1,5 @@
 # Core Dependencies
+<<<<<<< Updated upstream
 fastapi==0.115.4
 uvicorn==0.34.2
 pydantic-settings==2.5.2
@@ -44,3 +45,75 @@ structlog==23.2.0
 # Utilities
 python-dateutil==2.8.2
 pytz==2023.3
+=======
+fastapi==0.115.2          # Minor bug fixes
+uvicorn==0.32.0           # Stable
+pydantic==2.9.2           # New features, FastAPI compatible
+python-dotenv==1.0.1      # Minor fixes
+python-multipart==0.0.12  # FastAPI compatibility
+aiofiles==24.1.0          # Performance improvements
+tenacity==9.0.0           # New retry features
+httpx==0.27.2             # Bug fixes, performance
+aiohttp==3.10.10          # Security fixes
+
+# AI & ML
+torch==2.7.0              # Kept for CUDA compatibility
+transformers==4.44.2      # Supports torch 2.7.0
+ollama==0.1.6             # Minor updates
+whisperx==3.1.0           # Stable, niche package
+elevenlabs==1.7.0         # New API features
+sentence-transformers==3.2.0  # Performance improvements
+numpy==2.1.2              # Torch compatibility
+scikit-learn==1.5.2       # New algorithms
+nltk==3.9.1               # Minor updates
+spacy==3.8.0              # New models
+
+# Database & Vector Store
+chromadb==0.5.11          # New features
+redis==5.1.1              # Performance improvements
+asyncpg==0.30.0           # Bug fixes
+psycopg2-binary==2.9.10   # Stable
+neo4j==5.24.0             # New driver features
+hnswlib==0.8.0            # Performance improvements
+sqlalchemy==2.0.36        # Stable
+alembic==1.13.3           # Migration improvements
+
+# Security & Compliance
+cryptography==43.0.1      # Security fixes
+python-jose==3.3.0        # Stable, avoiding 3.5.0 issues
+passlib==1.7.4            # Stable
+bcrypt==4.2.0             # Minor fixes
+PyJWT==2.9.0              # Security enhancements
+pyotp==2.10.0             # Minor updates
+qrcode==8.0               # Updated from 7.4.2
+geoip2==4.8.0             # Stable
+
+# Monitoring & Performance
+prometheus-client==0.21.0 # Updated from 0.17.1; new metrics
+opentelemetry-api==1.27.0 # Updated from 1.21.0; new features
+opentelemetry-sdk==1.27.0 # Updated from 1.21.0
+opentelemetry-instrumentation-fastapi==0.48.0  # Stable release from 0.41b0
+opentelemetry-exporter-prometheus==1.27.0     # Updated from 0.54b1
+opentelemetry-instrumentation-sqlalchemy==0.48.0  # Stable release
+opentelemetry-instrumentation-redis==0.48.0    # Stable release
+opentelemetry-instrumentation-httpx==0.48.0    # Stable release
+sentry-sdk==2.16.0        # Updated from 1.35.0; new features
+structlog==24.4.0         # Updated from 23.2.0; logging improvements
+psutil==6.0.0             # Updated from 5.9.8; minor fixes
+
+# Testing
+pytest==8.3.3             # Updated from 7.4.3; new features
+pytest-asyncio==0.24.0    # Updated from 0.21.1; async support
+pytest-cov==5.0.0         # Updated from 4.1.0; coverage improvements
+pytest-benchmark==4.0.0   # Stable
+pytest-mock==3.14.0       # Updated from 3.12.0; mocking improvements
+pytest-env==1.1.5         # Updated from 1.1.1; minor fixes
+pytest-xdist==3.6.1       # Updated from 3.5.0; parallel testing
+coverage==7.6.4           # Updated from 7.3.2; new features
+
+# Utilities
+python-dateutil==2.9.0    # Updated from 2.8.2; bug fixes
+pytz==2024.2              # Updated from 2023.3; timezone updates
+email-validator==2.2.0    # Updated from 2.1.0; validation improvements
+python-slugify==8.0.4     # Updated from 8.0.1; minor fixes
+>>>>>>> Stashed changes
