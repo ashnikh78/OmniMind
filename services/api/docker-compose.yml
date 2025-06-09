@@ -1,5 +1,47 @@
-version: '3.8'
 services:
+  frontend:
+    build:
+      context: ./services/frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      REACT_APP_API_URL: ${REACT_APP_API_URL:-http://api:8000}
+      REACT_APP_METRICS_URL: ${REACT_APP_METRICS_URL:-http://prometheus:9090}
+      REACT_APP_KIBANA_URL: ${REACT_APP_KIBANA_URL:-http://kibana:5601}
+    depends_on:
+      api:
+        condition: service_healthy
+      kibana:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.4"
+          memory: 384M
+        reservations:
+          memory: 192M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        compress: "true"
+
   api:
     build:
       context: ./services/api
@@ -7,52 +49,530 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./services/api:/app
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      PYTHONUNBUFFERED: "1"
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379/0
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-omnimind}
+      ML_SERVICE_URL: ${ML_SERVICE_URL:-http://ollama:11434}
+      OLLAMA_HOST: ${OLLAMA_HOST:-0.0.0.0:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-phi3:mini}
+      METRICS_URL: ${REACT_APP_METRICS_URL:-http://prometheus:9090}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-noreply@omnimind.example.com}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@omnimind.example.com}
+      BACKEND_CORS_ORIGINS: '["https://app.apiplatform.ai","http://localhost:8000","http://kibana:5601"]'
+      CELERY_BROKER_URL: redis://default:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://default:${REDIS_PASSWORD}@redis:6379/0
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
+      MODEL_UNLOAD_TIMEOUT: ${MODEL_UNLOAD_TIMEOUT:-300}
+      LOGSTASH_HOST: ${LOGSTASH_HOST:-logstash:5044}
+    networks:
+      - app-network
     depends_on:
-      - redis
-      - ollama
-    env_file:
-      - ./services/api/.env
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      logstash:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.8"
+          memory: 512M
+        reservations:
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        compress: "true"
 
-  frontend:
-    image: node:18
-    working_dir: /frontend
-    command: npm start
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend:/frontend
+  db:
+    image: postgres:16
     environment:
-      - REACT_APP_API_URL=http://api:8000
-    depends_on:
-      - api
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-omnimind}
+      TZ: ${TZ:-UTC}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-omnimind}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 384M
+        reservations:
+          memory: 192M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        compress: "true"
 
   redis:
-    image: redis:6
+    image: redis:7.2.4
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--bind", "0.0.0.0", "--port", "6379", "--loglevel", "notice", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "volatile-lru", "--logfile", "/data/redis.log"]
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 300s
+    env_file:
+      - .env
     volumes:
       - redis_data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 192M
+        reservations:
+          memory: 96M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        compress: "true"
 
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.3.12
     ports:
       - "11434:11434"
+    networks:
+      - app-network
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-phi3:mini}
+      OLLAMA_NUM_GPU: "0"  # Disable GPU if not set up
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_QUEUE: "2"
+      OLLAMA_KEEP_ALIVE: "5m"
+      OLLAMA_LOG_LEVEL: ${OLLAMA_LOG_LEVEL:-debug}
+      OLLAMA_METRICS: "true"
+      TZ: ${TZ:-UTC}
+    volumes:
+      - ollama_data:/root/.ollama
+      - ./ollama_entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 300s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 6144M
+        reservations:
+          memory: 1024M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        compress: "true"
+
+  ollama-monitor:
+    image: alpine:3.18
+    command: >
+      /bin/sh -c "
+      apk add curl;
+      while true; do
+        if ! curl -f http://ollama:11434/api/tags >/dev/null 2>&1; then
+          echo 'Ollama is down, relying on restart policy...';
+        else
+          echo 'Ollama is healthy';
+        fi;
+        sleep 30;
+      done"
+    depends_on:
+      ollama:
+        condition: service_started
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://ollama:11434/api/tags"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 32M
+        reservations:
+          memory: 16M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+        compress: "true"
 
   prometheus:
-    image: prom/prometheus
+    image: prom/prometheus:latest
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 192M
+        reservations:
+          memory: 96M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        compress: "true"
 
-  grafana:
-    image: grafana/grafana
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms256m -Xmx256m
     ports:
-      - "3000:3000"
+      - "9200:9200"
     volumes:
-      - grafana_data:/var/lib/grafana
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 384M
+        reservations:
+          memory: 192M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        compress: "true"
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.3
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=["http://elasticsearch:9200"]
+    volumes:
+      - ./kibana.yml:/usr/share/kibana/config/kibana.yml:ro
+    networks:
+      - app-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5601/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 256M
+        reservations:
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        compress: "true"
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.15.3
+    volumes:
+      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+    environment:
+      - LS_JAVA_OPTS=-Xms128m -Xmx128m
+    networks:
+      - app-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9600/_node/stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 256M
+        reservations:
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        compress: "true"
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9100/metrics"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 64M
+        reservations:
+          memory: 32M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+        compress: "true"
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 128M
+        reservations:
+          memory: 64M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+        compress: "true"
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    networks:
+      - app-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9121/metrics"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 64M
+        reservations:
+          memory: 32M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+        compress: "true"
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    ports:
+      - "9187:9187"
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-omnimind}?sslmode=disable
+    networks:
+      - app-network
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9187/metrics"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 64M
+        reservations:
+          memory: 32M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+        compress: "true"
 
 volumes:
+  pgdata:
   redis_data:
-  grafana_data:
+  ollama_data:
+  prometheus_data:
+  elasticsearch_data:
+
+networks:
+  app-network:
+    driver: bridge
+    name: omnimind_app_network
+    attachable: true

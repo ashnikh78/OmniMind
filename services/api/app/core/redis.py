@@ -1,32 +1,32 @@
-import redis
-import logging
-from typing import Optional
+import aioredis
 from app.core.config import get_settings
+import logging
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
-def init_redis_client() -> Optional[redis.Redis]:
-    """Initialize and return a Redis client with proper settings"""
-    settings = get_settings()
+async def init_redis_client():
+    """Initialize and return an async Redis client using aioredis."""
     try:
-        client = redis.Redis.from_url(
+        redis_client = await aioredis.create_redis_pool(
             settings.REDIS_URL,
             decode_responses=True,
-            socket_timeout=5,
-            socket_connect_timeout=5,
-            health_check_interval=30
+            timeout=5,
+            connection_timeout=5
         )
-        if client.ping():
-            logger.info(f"Connected to Redis at {settings.REDIS_URL}")
-            return client
-    except Exception as e:
-        logger.error(f"Redis connection failed: {e}")
-    return None
+        await redis_client.ping()
+        logger.info("Async Redis connection established")
+        return redis_client
+    except aioredis.RedisError as e:
+        logger.critical(f"Failed to initialize async Redis client: {e}")
+        raise
 
-async def close_redis_client(client: redis.Redis):
-    """Properly close Redis connection"""
+async def close_redis_client(redis_client):
+    """Close the async Redis connection."""
     try:
-        client.close()
-        logger.info("Redis connection closed")
+        if redis_client:
+            redis_client.close()
+            await redis_client.wait_closed()
+            logger.info("Async Redis connection closed")
     except Exception as e:
-        logger.error(f"Error closing Redis: {e}")
+        logger.error(f"Failed to close async Redis client: {e}")

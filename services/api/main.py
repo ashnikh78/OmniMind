@@ -1,30 +1,34 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
-from app.core import get_settings
+from app.core.config import get_settings
+from app.core.logging import setup_logging
 from app.middleware.security import add_security_headers
 from app.core.redis import init_redis_client, close_redis_client
-import time
+from pathlib import Path
+import sys
+import uvicorn
 
-# Initialize settings first
+# Path resolution
+sys.path.append(str(Path(__file__).parent.parent))
+
+# Settings
 settings = get_settings()
 
-# Configure logging
-logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+# Logging
+logger = setup_logging()
 
-# Initialize FastAPI app
+# FastAPI app
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="Enterprise-grade AI platform",
     version="1.0.0",
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    docs_url=None if getattr(settings, "ENVIRONMENT", "production") == "production" else "/docs",
+    redoc_url=None
 )
 
-# Add middleware
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.BACKEND_CORS_ORIGINS,
@@ -35,47 +39,31 @@ app.add_middleware(
 )
 app.middleware("http")(add_security_headers)
 
-# Initialize app state
-app.state.redis_client = None
-app.state.start_time = time.time()
-
-# Lazy import routers
-def include_routers():
-    from app.api.endpoints import health_router, chat_router
-    from app.routers.auth import router as auth_router, user_router
-    
-    app.include_router(health_router, tags=["health"])
-    app.include_router(chat_router, prefix=settings.API_V1_STR, tags=["chat"])
-    app.include_router(auth_router, prefix=settings.API_V1_STR, tags=["auth"])
-    app.include_router(user_router, prefix=settings.API_V1_STR, tags=["users"])
-
-include_routers()
-
+# Redis
 @app.on_event("startup")
-def startup_event():
-    logger.info("Starting FastAPI application")
+async def startup_event():
     try:
-        app.state.redis_client = init_redis_client()
-        if app.state.redis_client and app.state.redis_client.ping():
-            logger.info("Redis connection verified")
-        else:
-            logger.error("Failed to establish Redis connection")
+        app.state.redis = await init_redis_client()
+        logger.info("Redis client initialized successfully")
     except Exception as e:
-        logger.error(f"Startup error: {e}")
+        logger.critical(f"Failed to initialize Redis client: {e}")
         raise
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    logger.info("Shutting down FastAPI application")
-    if app.state.redis_client:
-        await close_redis_client(app.state.redis_client)
+    try:
+        if app.state.redis:
+            await close_redis_client(app.state.redis)
+            logger.info("Redis client closed successfully")
+    except Exception as e:
+        logger.error(f"Failed to close Redis client: {e}")
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
         port=8000,
         log_level=settings.LOG_LEVEL.lower(),
-        reload=settings.ENVIRONMENT == "development"
+        reload=settings.ENVIRONMENT == "development",
+        workers=1
     )
